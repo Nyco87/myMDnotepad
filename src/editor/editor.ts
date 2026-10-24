@@ -15,6 +15,7 @@ import { tableControlsPlugin } from "./tables";
 import { imageNodeView, imagePastePlugin } from "./images";
 import { taskItemView } from "./task-item";
 import { alertView } from "./alerts";
+import { slashMenuPlugin, type SlashCommand } from "./slash";
 import { parseMarkdown } from "../markdown/parse";
 import { serializeMarkdown } from "../markdown/serialize";
 
@@ -34,6 +35,8 @@ export interface EditorOptions {
   noteRel: string;
   /** Error message for the user (image paste failures). Read lazily, so it can be set after creation. */
   onError?: (message: string) => void;
+  /** Commands of the « / » menu. Read lazily; without it the menu never opens. */
+  slashCommands?: () => SlashCommand[];
 }
 
 /**
@@ -42,6 +45,8 @@ export interface EditorOptions {
  */
 function buildPlugins(schema: Schema, opts: EditorOptions): Plugin[] {
   return [
+    // First: while the « / » menu is open it takes the arrow / Enter / Escape keys before the keymaps.
+    slashMenuPlugin(() => opts.slashCommands?.() ?? []),
     history(),
     buildInputRules(schema),
     // Before baseKeymap: sticky-block Enter/ArrowDown must win over the defaults.

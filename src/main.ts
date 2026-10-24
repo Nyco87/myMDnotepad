@@ -11,7 +11,10 @@ import {
   type RootStatus,
   type Settings,
 } from "./api";
+import type { EditorView } from "prosemirror-view";
 import { createEditor } from "./editor/editor";
+import { cursorAnchor } from "./editor/slash";
+import { buildSlashCommands } from "./editor/slash-commands";
 import { initAccent } from "./ui/accent";
 import { showContextMenu } from "./ui/context-menu";
 import { showFirstRun } from "./ui/first-run";
@@ -223,11 +226,22 @@ async function main(): Promise<void> {
     ui.emptyState.hidden = false;
     ui.emptyState.textContent = "Aucune note ouverte — Ctrl+N pour en créer une";
 
+    // Menu « / » : les commandes qui ouvrent une fenêtre passent par la barre d'outils, ancrées sur le curseur.
+    const viaToolbar = (id: string) => (view: EditorView) => toolbar?.invoke(id, cursorAnchor(view));
+    const slashCommands = buildSlashCommands({
+      table: viaToolbar("table"),
+      link: viaToolbar("link"),
+      image: viaToolbar("image"),
+      symbols: viaToolbar("emoji"),
+      // `diagram` : branché avec l'atelier de schémas (Task 9).
+    });
+
     tabs = createTabs({
       host: ui.editorHost,
       io: { readNote, writeNote, createNote },
       makeEditor: (mount, opts) => {
         opts.onError = toast;
+        opts.slashCommands = () => slashCommands;
         return createEditor(mount, opts);
       },
       notify: toast,

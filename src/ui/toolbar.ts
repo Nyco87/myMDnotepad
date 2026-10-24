@@ -24,6 +24,11 @@ export interface ToolbarHandle {
    * selection change (e.g. a tab switch swapped the EditorView, or setMarkdown).
    */
   refresh(): void;
+  /**
+   * Runs a toolbar action (`table`, `link`, `image`, `emoji`…) as if its button had been clicked, but anchors the
+   * popup it opens on `anchor` (the « / » menu passes the cursor). Does nothing when the id is unknown or no editor is active.
+   */
+  invoke(id: string, anchor?: HTMLElement): void;
   /** Removes the global listeners (selectionchange, popup tracking). */
   destroy(): void;
 }
@@ -288,6 +293,7 @@ export function mountToolbar(
 
   const disposers: (() => void)[] = [];
   const buttons: { def: ButtonDef; btn: HTMLButtonElement }[] = [];
+  const actions = new Map<string, (anchor: HTMLElement) => void>();
   /** Whether the button's popup was open at mousedown time (outside-click handlers close it first). */
   const wasOpen = new WeakMap<HTMLElement, boolean>();
   const trackPopup = (btn: HTMLElement, selector: string): void => {
@@ -316,17 +322,22 @@ export function mountToolbar(
     btn.setAttribute("aria-label", def.title);
     btn.addEventListener("mousedown", (e) => e.preventDefault()); // never steal focus from the editor
     if (def.popup) trackPopup(btn, def.popup);
-    btn.addEventListener("click", () => {
+    const act = (anchor: HTMLElement): void => {
       const view = getView();
       if (!view) return;
-      if (def.popup && closesPopup(btn)) return;
       if (def.command) {
         def.command(view.state)(view.state, view.dispatch, view);
         view.focus();
       } else if (def.run) {
-        void Promise.resolve(def.run(btn, view)).catch((err) => console.error(err));
+        void Promise.resolve(def.run(anchor as HTMLButtonElement, view)).catch((err) => console.error(err));
       }
       refresh();
+    };
+    actions.set(def.id, act);
+    btn.addEventListener("click", () => {
+      if (!getView()) return;
+      if (def.popup && closesPopup(btn)) return;
+      act(btn);
     });
     buttons.push({ def, btn });
     return btn;
@@ -387,5 +398,12 @@ export function mountToolbar(
   document.addEventListener("selectionchange", refresh);
   refresh();
   disposers.push(() => document.removeEventListener("selectionchange", refresh));
-  return { refresh, destroy: () => disposers.forEach((d) => d()) };
+  return {
+    refresh,
+    invoke(id, anchor) {
+      const entry = buttons.find((b) => b.def.id === id);
+      if (entry) actions.get(id)?.(anchor ?? entry.btn);
+    },
+    destroy: () => disposers.forEach((d) => d()),
+  };
 }

@@ -55,6 +55,17 @@ describe("toolbar", () => {
     expect(ed.getMarkdown()).toBe("==hello==\n");
   });
 
+  it("invoke runs a popup action anchored on the given element", () => {
+    const { ed, el } = setup("hello\n");
+    const handle = mountToolbar(el, () => ed.view);
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    handle.invoke("link", anchor);
+    expect(document.querySelector(".link-pop")).not.toBeNull();
+    handle.invoke("nope", anchor); // unknown id: ignored
+    handle.destroy();
+  });
+
   it("applies bold on click and reflects it as active", () => {
     const { ed, btn, tb } = setup("hello\n");
     setRange(ed.view, 1, 6);
