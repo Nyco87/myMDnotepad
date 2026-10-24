@@ -99,8 +99,18 @@ pub fn read_note(root: &Path, rel: &str) -> Result<NoteFile, String> {
     Ok(NoteFile { content: text, mtime_ms: mtime_ms(&p) })
 }
 
-pub fn write_note(root: &Path, rel: &str, content: &str) -> Result<u64, String> {
+/// Erreur renvoyée par `write_note` quand le fichier a changé depuis la dernière lecture/écriture connue.
+pub const CONFLICT: &str = "CONFLICT";
+
+/// Écrit la note. Compare-and-swap : si `expected_mtime` est fourni et que le fichier existe avec un autre
+/// mtime (modification externe pas encore vue), rien n'est écrit et l'erreur `CONFLICT` est renvoyée.
+pub fn write_note(root: &Path, rel: &str, content: &str, expected_mtime: Option<u64>) -> Result<u64, String> {
     let p = resolve(root, rel)?;
+    if let Some(expected) = expected_mtime {
+        if p.is_file() && mtime_ms(&p) != expected {
+            return Err(CONFLICT.to_string());
+        }
+    }
     write_atomic(&p, content.as_bytes())?;
     Ok(mtime_ms(&p))
 }
@@ -137,11 +147,25 @@ mod tests {
     }
     #[test] fn write_note_is_atomic_and_leaves_no_tmp() {
         let d = tempdir().unwrap();
-        write_note(d.path(), "n.md", "old").unwrap();
-        let m = write_note(d.path(), "n.md", "salut\n").unwrap();
+        write_note(d.path(), "n.md", "old", None).unwrap();
+        let m = write_note(d.path(), "n.md", "salut\n", None).unwrap();
         assert!(m > 0);
         let files: Vec<_> = fs::read_dir(d.path()).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
         assert_eq!(files, ["n.md"]);
         assert_eq!(fs::read_to_string(d.path().join("n.md")).unwrap(), "salut\n");
+    }
+    #[test] fn write_note_with_stale_expected_mtime_is_a_conflict() {
+        let d = tempdir().unwrap();
+        let m = write_note(d.path(), "n.md", "v1", None).unwrap();
+        // Écriture externe (OneDrive, VS Code) : le mtime change.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        fs::write(d.path().join("n.md"), "externe").unwrap();
+        assert_eq!(write_note(d.path(), "n.md", "local", Some(m)), Err("CONFLICT".to_string()));
+        assert_eq!(fs::read_to_string(d.path().join("n.md")).unwrap(), "externe");
+        // Avec le mtime à jour, l'écriture passe ; un fichier absent s'écrit quel que soit `expected`.
+        let fresh = mtime_ms(&d.path().join("n.md"));
+        assert!(write_note(d.path(), "n.md", "local", Some(fresh)).is_ok());
+        assert_eq!(fs::read_to_string(d.path().join("n.md")).unwrap(), "local");
+        assert!(write_note(d.path(), "absent.md", "x", Some(1)).is_ok());
     }
 }

@@ -62,7 +62,10 @@ beforeEach(() => {
       if (!f) throw "Note introuvable";
       return { ...f };
     }),
-    writeNote: vi.fn(async (rel: string, content: string) => {
+    // Comme le backend : compare-and-swap sur le mtime quand `expected` est fourni et que le fichier existe.
+    writeNote: vi.fn(async (rel: string, content: string, expected?: number) => {
+      const f = disk.get(rel);
+      if (expected !== undefined && f && f.mtime_ms !== expected) throw "CONFLICT";
       put(rel, content);
       return disk.get(rel)!.mtime_ms;
     }),
@@ -130,7 +133,7 @@ describe("tabs controller", () => {
     editors.get("b.md")!.type("B modifiée");
     tabs.activate("a.md");
     for (let i = 0; i < 5; i++) await Promise.resolve();
-    expect(io.writeNote).toHaveBeenCalledWith("b.md", "B modifiée");
+    expect(io.writeNote).toHaveBeenCalledWith("b.md", "B modifiée", expect.any(Number));
   });
 
   it("renamed_updates_tab_path_and_saves_to_new_path", async () => {
@@ -141,7 +144,7 @@ describe("tabs controller", () => {
     expect(tabs.active()).toBe("Projets/Notes.md");
     editors.get("Projets/MDnote.md")!.type("v2");
     await tabs.flushAll();
-    expect(io.writeNote).toHaveBeenLastCalledWith("Projets/Notes.md", "v2");
+    expect(io.writeNote).toHaveBeenLastCalledWith("Projets/Notes.md", "v2", expect.any(Number));
 
     // Renommage d'un dossier : remappage par préfixe.
     tabs.renamed("Projets", "Archive");
@@ -149,7 +152,7 @@ describe("tabs controller", () => {
     expect(tabs.active()).toBe("Archive/Notes.md");
     editors.get("Projets/MDnote.md")!.type("v3");
     await tabs.flushAll();
-    expect(io.writeNote).toHaveBeenLastCalledWith("Archive/Notes.md", "v3");
+    expect(io.writeNote).toHaveBeenLastCalledWith("Archive/Notes.md", "v3", expect.any(Number));
   });
 
   it("deleted_closes_tabs_by_folder_prefix_without_saving", async () => {
@@ -184,7 +187,7 @@ describe("tabs controller", () => {
     expect(io.createNote).toHaveBeenCalledWith("Projets", "MDnote (conflit 2026-10-24 1830)");
     expect(io.writeNote.mock.calls).toEqual([
       ["Projets/MDnote (conflit 2026-10-24 1830).md", "version externe"],
-      ["Projets/MDnote.md", "version locale"],
+      ["Projets/MDnote.md", "version locale", expect.any(Number)],
     ]);
     expect(editors.get("Projets/MDnote.md")!.setMarkdown).not.toHaveBeenCalled();
     expect(messages.some((m) => m.includes("MDnote (conflit 2026-10-24 1830)"))).toBe(true);
@@ -296,7 +299,7 @@ describe("tabs controller", () => {
     await tabs.flushAll();
     expect(io.writeNote.mock.calls).toEqual([
       ["Projets/MDnote (conflit 2026-10-24 1830).md", "version externe"],
-      ["Projets/MDnote.md", "version locale"],
+      ["Projets/MDnote.md", "version locale", expect.any(Number)],
     ]);
   });
 
@@ -336,7 +339,7 @@ describe("tabs controller", () => {
     tabs.renamed("Projets", "Archive");
     release();
     await flushing;
-    expect(io.writeNote.mock.calls).toEqual([["Archive/MDnote.md", "pendant le renommage"]]);
+    expect(io.writeNote.mock.calls).toEqual([["Archive/MDnote.md", "pendant le renommage", expect.any(Number)]]);
   });
 
   it("lockUnder_waits_for_inflight_write_and_deleted_tab_never_writes", async () => {
@@ -365,6 +368,30 @@ describe("tabs controller", () => {
     await flushing;
     expect(io.writeNote).toHaveBeenCalledTimes(1);
     expect(disk.get("a.md")!.content).toBe("v1");
+  });
+
+  it("external_edit_landing_before_watcher_event_is_not_overwritten", async () => {
+    // Régression (revue finale #1) : OneDrive/VS Code écrit le fichier, l'autosave part avant l'événement du watcher.
+    const tabs = setup();
+    await tabs.open("a.md");
+    editors.get("a.md")!.type("A locale");
+    put("a.md", "A externe (OneDrive)"); // le debounce du watcher (250 ms) n'a pas encore tiré
+    await tabs.flushAll(); // le minuteur d'autosave tire d'abord
+    await tabs.externalChange(["a.md"]); // puis l'événement du watcher arrive
+    expect(disk.get("a.md")!.content).toBe("A locale");
+    expect(disk.get("a (conflit 2026-10-24 1830).md")?.content).toBe("A externe (OneDrive)");
+    expect(messages.some((m) => m.includes("a (conflit 2026-10-24 1830)"))).toBe(true);
+    expect(editors.get("a.md")!.setMarkdown).not.toHaveBeenCalled();
+  });
+
+  it("mtime_only_change_retries_without_conflict_copy", async () => {
+    const tabs = setup();
+    await tabs.open("a.md");
+    editors.get("a.md")!.type("A locale");
+    put("a.md", "A"); // horodatage retouché (synchro), même contenu
+    await tabs.flushAll();
+    expect(disk.get("a.md")!.content).toBe("A locale");
+    expect(io.createNote).not.toHaveBeenCalled();
   });
 
   it("restore_opens_active_first_and_skips_missing_files", async () => {

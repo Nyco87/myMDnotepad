@@ -5,7 +5,8 @@ import { createAutosaver, type Autosaver } from "../editor/autosave";
 /** Accès disque utilisé par les onglets (injecté : `api` dans l'app, une fausse implémentation dans les tests). */
 export interface TabsIO {
   readNote(rel: string): Promise<NoteFile>;
-  writeNote(rel: string, content: string): Promise<number>;
+  /** Avec `expectedMtime` : rejette avec "CONFLICT" si le fichier existe et que son mtime a changé. */
+  writeNote(rel: string, content: string, expectedMtime?: number): Promise<number>;
   createNote(dirRel: string, baseName: string): Promise<string>;
 }
 
@@ -85,6 +86,8 @@ interface Tab {
 }
 
 const pad = (n: number): string => String(n).padStart(2, "0");
+/** Erreur renvoyée par `writeNote` quand le fichier a changé depuis le mtime attendu. */
+export const CONFLICT = "CONFLICT";
 const errText = (e: unknown): string => (typeof e === "string" ? e : e instanceof Error ? e.message : String(e));
 
 /** Nom d'affichage d'une note : son nom de fichier sans `.md`. */
@@ -151,27 +154,35 @@ export function createTabs(o: TabsOptions): TabsController {
       async (md) => {
         // Une version externe en attente de copie bloque l'écriture (le contenu reste en file, pending() reste vrai).
         // La condition est revérifiée de façon synchrone juste avant l'écriture : un verrou posé entre-temps relance l'attente.
-        for (;;) {
-          await waitUnlocked(tab);
-          if (!tab.closed && tab.conflicts.length > 0) await resolveConflicts(tab);
-          if (tab.closed || (tab.locks.size === 0 && tab.conflicts.length === 0)) break;
-        }
-        if (tab.closed) return tab.lastKnownMtime; // onglet supprimé : ne jamais recréer le fichier
-        tab.writing = md;
-        try {
-          const p = o.io.writeNote(tab.rel, md);
-          tab.inflight = p;
-          const mtime = await p;
-          tab.lastKnownMtime = mtime;
-          tab.diskKnown = md;
-          if (tab.missing) {
-            tab.missing = false;
-            changed();
+        for (let attempt = 0; ; attempt++) {
+          for (;;) {
+            await waitUnlocked(tab);
+            if (!tab.closed && tab.conflicts.length > 0) await resolveConflicts(tab);
+            if (tab.closed || (tab.locks.size === 0 && tab.conflicts.length === 0)) break;
           }
-          return mtime;
-        } finally {
-          tab.writing = null;
-          tab.inflight = null;
+          if (tab.closed) return tab.lastKnownMtime; // onglet supprimé : ne jamais recréer le fichier
+          tab.writing = md;
+          try {
+            // Compare-and-swap : refusé si le fichier a changé depuis notre dernière lecture/écriture.
+            const p = o.io.writeNote(tab.rel, md, tab.missing ? undefined : tab.lastKnownMtime);
+            tab.inflight = p;
+            const mtime = await p;
+            tab.lastKnownMtime = mtime;
+            tab.diskKnown = md;
+            if (tab.missing) {
+              tab.missing = false;
+              changed();
+            }
+            return mtime;
+          } catch (e) {
+            if (errText(e) !== CONFLICT || attempt >= 5) throw e;
+          } finally {
+            tab.writing = null;
+            tab.inflight = null;
+          }
+          // Le fichier a changé sur le disque avant que le watcher ne le signale : on le relit et, si c'est une
+          // autre version, elle est copiée en « (conflit …) » avant d'écrire la version locale (boucle ci-dessus).
+          await takeExternal(tab, md);
         }
       },
       o.autosaveDelayMs ?? 400,
@@ -183,6 +194,16 @@ export function createTabs(o: TabsOptions): TabsController {
     if (activeRel === null) show(rel);
     else changed();
     return true;
+  };
+
+  /** Relit le fichier après un refus "CONFLICT" ; une version inconnue est mise en file de copie de conflit. */
+  const takeExternal = async (tab: Tab, local: string): Promise<void> => {
+    const rel = tab.rel;
+    const file = await o.io.readNote(rel);
+    if (tab.closed || tab.rel !== rel) return;
+    tab.lastKnownMtime = file.mtime_ms;
+    if (file.content !== tab.diskKnown && file.content !== local) tab.conflicts.push({ content: file.content, copy: null });
+    tab.diskKnown = file.content;
   };
 
   const waitUnlocked = async (tab: Tab): Promise<void> => {

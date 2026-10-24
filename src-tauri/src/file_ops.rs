@@ -178,7 +178,7 @@ fn follow_note(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String> 
     let res = relocate_links(root, old_rel, new_rel, &links, &mut map);
     let updated = images::rewrite_image_links(&note.content, |l| map.get(l).cloned());
     if updated != note.content {
-        write_note(root, new_rel, &updated)?;
+        write_note(root, new_rel, &updated, None)?;
     }
     res
 }

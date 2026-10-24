@@ -58,9 +58,12 @@ export function listTree(): Promise<TreeNode> {
 export function readNote(rel: string): Promise<NoteFile> {
   return invoke<NoteFile>("read_note", { rel });
 }
-/** Renvoie le mtime (ms) du fichier écrit. */
-export function writeNote(rel: string, content: string): Promise<number> {
-  return invoke<number>("write_note", { rel, content });
+/**
+ * Renvoie le mtime (ms) du fichier écrit. Avec `expectedMtime`, l'écriture est refusée (erreur "CONFLICT")
+ * si le fichier existe et a changé depuis ce mtime (modification externe pas encore vue).
+ */
+export function writeNote(rel: string, content: string, expectedMtime?: number): Promise<number> {
+  return invoke<number>("write_note", { rel, content, expectedMtime: expectedMtime ?? null });
 }
 export function createNote(dirRel: string, baseName: string): Promise<string> {
   return invoke<string>("create_note", { dirRel, baseName });

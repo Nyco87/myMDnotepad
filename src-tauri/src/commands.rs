@@ -15,8 +15,8 @@ pub fn read_note(state: State<AppState>, rel: String) -> Result<NoteFile, String
 }
 
 #[tauri::command]
-pub fn write_note(state: State<AppState>, rel: String, content: String) -> Result<u64, String> {
-    notes_fs::write_note(&state.root()?, &rel, &content)
+pub fn write_note(state: State<AppState>, rel: String, content: String, expected_mtime: Option<u64>) -> Result<u64, String> {
+    notes_fs::write_note(&state.root()?, &rel, &content, expected_mtime)
 }
 
 #[tauri::command]
