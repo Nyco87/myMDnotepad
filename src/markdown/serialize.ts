@@ -115,9 +115,19 @@ function placeholder(source: string): string {
   return `\u0000${rawStore.length - 1}\u0000`;
 }
 
-/** Puts raw sources back. An empty raw line also drops the block prefix's trailing spaces ("> "). */
+/** U+0000 typed or pasted into the document would be read back as a placeholder: write U+FFFD like markdown-it. */
+const noNul = (text: string): string => text.replace(/\u0000/g, "�");
+
+/**
+ * Puts raw sources back. An empty raw line also drops the block prefix's trailing spaces ("> ").
+ * An index we did not issue (U+0000 in an attribute) is written as it was, its U+0000 made U+FFFD.
+ */
 function expandRaw(md: string): string {
-  return md.replace(PLACEHOLDER, (_m, ws: string, n: string) => (rawStore[Number(n)] === "" ? "" : ws + rawStore[Number(n)]));
+  return md.replace(PLACEHOLDER, (m, ws: string, n: string) => {
+    const source = rawStore[Number(n)];
+    if (source === undefined) return noNul(m);
+    return source === "" ? "" : ws + source;
+  });
 }
 
 /** Inline markdown of one table cell, on a single line. */
@@ -152,7 +162,7 @@ const nodes: Record<string, NodeRule> = {
     const longest = Math.max(2, ...runs.map((r) => r.length));
     const fence = "`".repeat(longest + 1);
     state.write(fence + node.attrs.language + "\n");
-    state.text(node.textContent, false);
+    state.text(noNul(node.textContent), false);
     state.write("\n"); // always (not ensureNewLine): content ending with a blank line keeps it
     state.write(fence);
     state.closeBlock(node);
@@ -241,12 +251,12 @@ const nodes: Record<string, NodeRule> = {
   text(state, node, parent, index) {
     const s = state as MarkdownSerializerState & { atBlockStart: boolean; inAutolink?: boolean };
     if (s.inAutolink) {
-      state.text(node.text!, false);
+      state.text(noNul(node.text!), false);
       return;
     }
     const afterBreak = isBreak(parent.maybeChild(index - 1)) && parent.type.name !== "heading";
     const lineStart = afterBreak || s.atBlockStart;
-    let out = escapeInline(state.esc(node.text!, lineStart));
+    let out = escapeInline(state.esc(noNul(node.text!), lineStart));
     if (lineStart) out = escapeLineStart(out, afterBreak);
     state.text(out, false);
   },

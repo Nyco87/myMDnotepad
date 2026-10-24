@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import type { Node } from "prosemirror-model";
 import { parseMarkdown } from "./parse";
 import { serializeMarkdown } from "./serialize";
+import { schema } from "./schema";
 
 const pretty = (md: string) => serializeMarkdown(parseMarkdown(md));
 
@@ -156,4 +157,26 @@ describe("parseMarkdown never throws (review)", () => {
       const once = pretty(md);
       expect(pretty(once)).toBe(once);
     });
+});
+
+describe("U+0000 never reaches the saved file (final review #8)", () => {
+  const NUL = String.fromCharCode(0);
+  const REPL = String.fromCharCode(0xfffd);
+  test("NUL in a text node is written as U+FFFD", () => {
+    const doc = schema.node("doc", null, [schema.node("paragraph", null, [schema.text(`a ${NUL}0${NUL} b`)])]);
+    expect(serializeMarkdown(doc)).toBe(`a ${REPL}0${REPL} b\n`);
+    const lone = schema.node("doc", null, [schema.node("paragraph", null, [schema.text(`a${NUL}b`)])]);
+    expect(serializeMarkdown(lone)).toBe(`a${REPL}b\n`);
+  });
+  test("NUL in a code block is written as U+FFFD", () => {
+    const doc = schema.node("doc", null, [schema.node("code_block", { language: "" }, [schema.text(`x${NUL}3${NUL}`)])]);
+    expect(serializeMarkdown(doc)).toBe("```\nx" + REPL + "3" + REPL + "\n```\n");
+  });
+  test("unknown raw placeholder is never written as undefined", () => {
+    const link = schema.marks.link.create({ href: `u${NUL}7${NUL}`, title: null });
+    const doc = schema.node("doc", null, [schema.node("paragraph", null, [schema.text("lien", [link])])]);
+    const out = serializeMarkdown(doc);
+    expect(out).not.toContain("undefined");
+    expect(out).toContain("7");
+  });
 });
