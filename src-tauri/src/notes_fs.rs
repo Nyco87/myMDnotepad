@@ -94,8 +94,11 @@ pub fn list_tree(root: &Path) -> Result<TreeNode, String> {
 pub fn read_note(root: &Path, rel: &str) -> Result<NoteFile, String> {
     let p = resolve(root, rel)?;
     let bytes = fs::read(&p).map_err(|e| format!("Impossible de lire la note : {e}"))?;
-    let text = String::from_utf8_lossy(&bytes);
-    let text = text.strip_prefix('\u{feff}').unwrap_or(&text).replace("\r\n", "\n");
+    let body = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes);
+    // Pas de conversion « lossy » : un fichier Latin-1 ouvert puis enregistré serait abîmé (caractères remplacés par �).
+    let text = std::str::from_utf8(body)
+        .map_err(|_| "Cette note n'est pas encodée en UTF-8 : ouverture refusée pour ne pas l'abîmer.".to_string())?;
+    let text = text.replace("\r\n", "\n");
     Ok(NoteFile { content: text, mtime_ms: mtime_ms(&p) })
 }
 
@@ -144,6 +147,21 @@ mod tests {
         let mut b = vec![0xEF, 0xBB, 0xBF]; b.extend_from_slice(b"# T\r\nx\r\n");
         fs::write(d.path().join("n.md"), b).unwrap();
         assert_eq!(read_note(d.path(), "n.md").unwrap().content, "# T\nx\n");
+    }
+    #[test] fn read_note_refuses_non_utf8() {
+        let d = tempdir().unwrap();
+        // « Été » en Latin-1 (Windows-1252) : É = 0xC9, é = 0xE9.
+        let latin1: &[u8] = &[0xC9, b't', 0xE9, b'\n'];
+        fs::write(d.path().join("latin1.md"), latin1).unwrap();
+        assert_eq!(
+            read_note(d.path(), "latin1.md").unwrap_err(),
+            "Cette note n'est pas encodée en UTF-8 : ouverture refusée pour ne pas l'abîmer."
+        );
+        // Le fichier n'est pas touché.
+        assert_eq!(fs::read(d.path().join("latin1.md")).unwrap(), latin1);
+        // BOM UTF-8 suivi de texte valide : accepté.
+        fs::write(d.path().join("bom.md"), [0xEF, 0xBB, 0xBF, 0xC3, 0xA9, b't', 0xC3, 0xA9]).unwrap();
+        assert_eq!(read_note(d.path(), "bom.md").unwrap().content, "\u{e9}t\u{e9}");
     }
     #[test] fn write_note_is_atomic_and_leaves_no_tmp() {
         let d = tempdir().unwrap();

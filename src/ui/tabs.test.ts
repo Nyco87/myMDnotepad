@@ -394,6 +394,16 @@ describe("tabs controller", () => {
     expect(io.createNote).not.toHaveBeenCalled();
   });
 
+  it("non_utf8_note_is_not_opened_and_error_is_shown", async () => {
+    const tabs = setup();
+    const msg = "Cette note n'est pas encodée en UTF-8 : ouverture refusée pour ne pas l'abîmer.";
+    io.readNote.mockRejectedValueOnce(msg);
+    expect(await tabs.open("a.md")).toBe(false);
+    expect(tabs.list()).toEqual([]);
+    expect(messages.some((m) => m.includes(msg))).toBe(true);
+    expect(io.writeNote).not.toHaveBeenCalled();
+  });
+
   it("restore_opens_active_first_and_skips_missing_files", async () => {
     const tabs = setup();
     const r = tabs.restore(["a.md", "gone.md", "b.md", "c.md"], "b.md");
