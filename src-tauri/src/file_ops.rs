@@ -221,7 +221,13 @@ fn follow_folder(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String
                     && old_parts[..old_parts.len() - 1].iter().zip(&new_parts).all(|(a, b)| *a == b.to_lowercase());
                 let old_last = &old_parts[old_parts.len() - 1];
                 let new_last = &new_parts[new_parts.len() - 1];
+                let mapped: Vec<String> =
+                    new_parts.iter().cloned().chain(target[old_parts.len()..].iter().cloned()).collect();
                 if renamed_only {
+                    // Lien resté valide après le déplacement (le dossier a suivi) : on n'y touche pas.
+                    if norm_join(new_dir, link).as_ref() == Some(&mapped) {
+                        return None;
+                    }
                     let mut done = false;
                     let segs: Vec<String> = link
                         .split('/')
@@ -235,10 +241,10 @@ fn follow_folder(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String
                         })
                         .collect();
                     let nl = segs.join("/");
-                    return (nl != link).then_some(nl);
+                    if norm_join(new_dir, &nl).as_ref() == Some(&mapped) {
+                        return (nl != link).then_some(nl);
+                    }
                 }
-                let mapped: Vec<String> =
-                    new_parts.iter().cloned().chain(target[old_parts.len()..].iter().cloned()).collect();
                 let nl = rel_between(new_dir, &mapped);
                 return (nl != link).then_some(nl);
             }
@@ -539,6 +545,16 @@ sans image
         md_with(r, "A/n.md", "![](../A/x.png)");
         rename_entry(r, "A", "B").unwrap();
         assert_eq!(fs::read_to_string(r.join("B/n.md")).unwrap(), "![](../B/x.png)");
+    }
+    #[test] fn rename_folder_nested_same_name_and_valid_inner_links() {
+        let d = tempdir().unwrap(); let r = d.path();
+        md_with(r, "A/A/x.png", "x");
+        md_with(r, "A/A/n.md", "![](../A/x.png)");
+        md_with(r, "A/m.md", "![](../A/A/x.png)");
+        rename_entry(r, "A", "B").unwrap();
+        // Cible déplacée avec le dossier : lien toujours valide, inchangé.
+        assert_eq!(fs::read_to_string(r.join("B/A/n.md")).unwrap(), "![](../A/x.png)");
+        assert_eq!(fs::read_to_string(r.join("B/m.md")).unwrap(), "![](../B/A/x.png)");
     }
     #[test] fn rename_and_move_succeed_with_warning_when_links_cannot_follow() {
         // Note illisible (Latin-1) : le renommage a lieu, la mise à jour des liens échoue → Ok + avertissement.

@@ -13,8 +13,9 @@ pub struct AccentState {
     settings: Option<UISettings>,
 }
 
+/// AccentLight2 : teinte utilisée par Windows 11 en thème sombre (meilleur contraste que Accent).
 fn read(settings: &UISettings) -> Result<String, String> {
-    let c = settings.GetColorValue(UIColorType::Accent).map_err(|e| e.to_string())?;
+    let c = settings.GetColorValue(UIColorType::AccentLight2).map_err(|e| e.to_string())?;
     Ok(to_hex(c.R, c.G, c.B))
 }
 
