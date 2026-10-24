@@ -71,11 +71,17 @@ export function createNote(dirRel: string, baseName: string): Promise<string> {
 export function createFolder(dirRel: string, baseName: string): Promise<string> {
   return invoke<string>("create_folder", { dirRel, name: baseName });
 }
-export function renameEntry(rel: string, newName: string): Promise<string> {
-  return invoke<string>("rename_entry", { rel, newName });
+/**
+ * Renommage/déplacement réussi : nouveau chemin, et éventuel avertissement (l'élément a bien changé de chemin
+ * mais certains liens d'images n'ont pas pu être mis à jour).
+ */
+export type Moved = { rel: string; warning?: string };
+
+export function renameEntry(rel: string, newName: string): Promise<Moved> {
+  return invoke<Moved>("rename_entry", { rel, newName });
 }
-export function moveEntry(rel: string, destDirRel: string): Promise<string> {
-  return invoke<string>("move_entry", { rel, destDirRel });
+export function moveEntry(rel: string, destDirRel: string): Promise<Moved> {
+  return invoke<Moved>("move_entry", { rel, destDirRel });
 }
 export function trashEntry(rel: string): Promise<void> {
   return invoke<void>("trash_entry", { rel });

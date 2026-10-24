@@ -1,6 +1,7 @@
 use crate::images::{self, norm_join, rel_between};
 use crate::notes_fs::{is_md, read_note, write_note};
 use crate::paths::{resolve, to_rel};
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -262,7 +263,20 @@ fn unshared_owned_images(root: &Path, rel: &str) -> Vec<PathBuf> {
 }
 
 
-pub fn rename_entry(root: &Path, rel: &str, new_name: &str) -> Result<String, String> {
+/// Résultat d'un renommage/déplacement réussi. `warning` : l'élément a bien changé de chemin, mais la mise à jour
+/// des liens d'images a échoué en partie (à afficher, sans annuler : l'appelant doit suivre le nouveau chemin).
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct Moved {
+    pub rel: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
+}
+
+fn links_warning(res: Result<(), String>) -> Option<String> {
+    res.err().map(|e| format!("Déplacement effectué, mais certains liens d'images n'ont pas pu être mis à jour : {e}"))
+}
+
+pub fn rename_entry(root: &Path, rel: &str, new_name: &str) -> Result<Moved, String> {
     let src = resolve(root, rel)?;
     if src == root {
         return Err("Impossible de renommer le dossier racine.".into());
@@ -284,13 +298,15 @@ pub fn rename_entry(root: &Path, rel: &str, new_name: &str) -> Result<String, St
         }
         fs::rename(&src, &dst).map_err(|e| format!("Impossible de renommer : {e}"))?;
         if is_note {
-            follow_note(root, rel, &to_rel(root, &dst))?;
+            // Le renommage a eu lieu : un échec ici n'est qu'un avertissement (sinon l'onglet garderait l'ancien chemin).
+            let warning = links_warning(follow_note(root, rel, &to_rel(root, &dst)));
+            return Ok(Moved { rel: to_rel(root, &dst), warning });
         }
     }
-    Ok(to_rel(root, &dst))
+    Ok(Moved { rel: to_rel(root, &dst), warning: None })
 }
 
-pub fn move_entry(root: &Path, rel: &str, dest_dir_rel: &str) -> Result<String, String> {
+pub fn move_entry(root: &Path, rel: &str, dest_dir_rel: &str) -> Result<Moved, String> {
     let src = resolve(root, rel)?;
     if src == root {
         return Err("Impossible de déplacer le dossier racine.".into());
@@ -306,7 +322,7 @@ pub fn move_entry(root: &Path, rel: &str, dest_dir_rel: &str) -> Result<String, 
         return Err("Impossible de déplacer un dossier dans lui-même.".into());
     }
     if src.parent() == Some(dest_dir.as_path()) {
-        return Ok(to_rel(root, &src));
+        return Ok(Moved { rel: to_rel(root, &src), warning: None });
     }
     let (stem, ext) = if src.is_file() {
         (
@@ -319,12 +335,15 @@ pub fn move_entry(root: &Path, rel: &str, dest_dir_rel: &str) -> Result<String, 
     let dst = unique_path(&dest_dir, &stem, ext.as_deref());
     fs::rename(&src, &dst).map_err(|e| format!("Impossible de déplacer : {e}"))?;
     let new_rel = to_rel(root, &dst);
-    if src.extension().is_some() && is_md(&dst) && dst.is_file() {
-        follow_note(root, rel, &new_rel)?;
+    // Le déplacement a eu lieu : un échec de mise à jour des liens n'est qu'un avertissement.
+    let follow = if src.extension().is_some() && is_md(&dst) && dst.is_file() {
+        follow_note(root, rel, &new_rel)
     } else if dst.is_dir() {
-        follow_folder(root, rel, &new_rel)?;
-    }
-    Ok(new_rel)
+        follow_folder(root, rel, &new_rel)
+    } else {
+        Ok(())
+    };
+    Ok(Moved { rel: new_rel, warning: links_warning(follow) })
 }
 
 pub fn trash_entry(root: &Path, rel: &str) -> Result<(), String> {
@@ -366,14 +385,14 @@ mod tests {
         fs::write(d.path().join("a.md"), "").unwrap();
         fs::write(d.path().join("b.md"), "").unwrap();
         assert_eq!(rename_entry(d.path(), "a.md", "b").unwrap_err(), "Une note ou un dossier porte déjà ce nom.");
-        assert_eq!(rename_entry(d.path(), "a.md", "c").unwrap(), "c.md");
+        assert_eq!(rename_entry(d.path(), "a.md", "c").unwrap().rel, "c.md");
     }
     #[test] fn move_suffixes_on_conflict() {
         let d = tempdir().unwrap();
         fs::create_dir(d.path().join("D")).unwrap();
         fs::write(d.path().join("D/a.md"), "").unwrap();
         fs::write(d.path().join("a.md"), "").unwrap();
-        assert_eq!(move_entry(d.path(), "a.md", "D").unwrap(), "D/a 2.md");
+        assert_eq!(move_entry(d.path(), "a.md", "D").unwrap().rel, "D/a 2.md");
     }
     #[test] fn move_folder_into_itself_is_refused() {
         let d = tempdir().unwrap();
@@ -392,7 +411,7 @@ mod tests {
         let d = tempdir().unwrap(); let r = d.path();
         md_with(r, "n.md", "![](images/n-2026-10-24-1.png)");
         md_with(r, "images/n-2026-10-24-1.png", "img");
-        assert_eq!(rename_entry(r, "n.md", "m").unwrap(), "m.md");
+        assert_eq!(rename_entry(r, "n.md", "m").unwrap().rel, "m.md");
         assert!(r.join("images/m-2026-10-24-1.png").is_file());
         assert!(!r.join("images/n-2026-10-24-1.png").exists());
         assert_eq!(fs::read_to_string(r.join("m.md")).unwrap(), "![](images/m-2026-10-24-1.png)");
@@ -404,7 +423,7 @@ mod tests {
         md_with(r, "A/images/n-2026-10-24-1.png", "img");
         md_with(r, "shared/s.png", "s");
         fs::create_dir_all(r.join("B/C")).unwrap();
-        assert_eq!(move_entry(r, "A/n.md", "B/C").unwrap(), "B/C/n.md");
+        assert_eq!(move_entry(r, "A/n.md", "B/C").unwrap().rel, "B/C/n.md");
         assert!(r.join("B/C/images/n-2026-10-24-1.png").is_file());
         assert!(!r.join("A/images/n-2026-10-24-1.png").exists());
         assert_eq!(fs::read_to_string(r.join("B/C/n.md")).unwrap(), "![](images/n-2026-10-24-1.png)
@@ -477,11 +496,29 @@ sans image
         move_entry(r, "B/A", "").unwrap();
         assert_eq!(fs::read_to_string(r.join("A/sub/deep.md")).unwrap(), "![](../../shared/s.png) ![](x.png)\n");
     }
+    #[test] fn rename_and_move_succeed_with_warning_when_links_cannot_follow() {
+        // Note illisible (Latin-1) : le renommage a lieu, la mise à jour des liens échoue → Ok + avertissement.
+        let d = tempdir().unwrap(); let r = d.path();
+        fs::write(r.join("n.md"), [0xC9u8, b'\n']).unwrap();
+        fs::create_dir(r.join("D")).unwrap();
+        let res = rename_entry(r, "n.md", "m");
+        assert!(res.is_ok(), "{res:?}");
+        let res = res.unwrap();
+        assert_eq!(res.rel, "m.md");
+        assert!(res.warning.unwrap().contains("UTF-8"));
+        assert!(r.join("m.md").is_file() && !r.join("n.md").exists());
+        let res = move_entry(r, "m.md", "D");
+        assert!(res.is_ok(), "{res:?}");
+        let res = res.unwrap();
+        assert_eq!(res.rel, "D/m.md");
+        assert!(res.warning.is_some());
+        assert!(r.join("D/m.md").is_file());
+    }
     #[test] fn rename_note_with_spaces_slugs_images() {
         let d = tempdir().unwrap(); let r = d.path();
         md_with(r, "Ma note.md", "![](images/Ma-note-2026-10-24-1.png)");
         md_with(r, "images/Ma-note-2026-10-24-1.png", "img");
-        assert_eq!(rename_entry(r, "Ma note.md", "Autre note").unwrap(), "Autre note.md");
+        assert_eq!(rename_entry(r, "Ma note.md", "Autre note").unwrap().rel, "Autre note.md");
         assert!(r.join("images/Autre-note-2026-10-24-1.png").is_file());
         assert_eq!(fs::read_to_string(r.join("Autre note.md")).unwrap(), "![](images/Autre-note-2026-10-24-1.png)");
     }
@@ -507,7 +544,10 @@ sans image
         fs::create_dir(r.join("B")).unwrap();
         // Verrou sans partage de suppression sur la 2e image : son déplacement échoue.
         let _lock = fs::OpenOptions::new().read(true).share_mode(1).open(r.join("images/n-2.png")).unwrap();
-        assert!(move_entry(r, "n.md", "B").is_err());
+        // Le déplacement a eu lieu : Ok avec un avertissement (revue finale #6), pas une erreur.
+        let moved = move_entry(r, "n.md", "B").unwrap();
+        assert_eq!(moved.rel, "B/n.md");
+        assert!(moved.warning.is_some());
         assert_eq!(fs::read_to_string(r.join("B/n.md")).unwrap(), "![](images/n-1.png) ![](images/n-2.png)");
         assert!(r.join("B/images/n-1.png").is_file());
     }

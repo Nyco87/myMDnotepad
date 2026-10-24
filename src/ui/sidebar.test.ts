@@ -35,9 +35,9 @@ vi.mock("../api", () => ({
   createFolder: vi.fn(async (dir: string, base: string) => addNode(dir, base, "folder")),
   renameEntry: vi.fn(async (rel: string, name: string) => {
     const i = rel.lastIndexOf("/");
-    return (i >= 0 ? rel.slice(0, i + 1) : "") + name + (rel.endsWith(".md") ? ".md" : "");
+    return { rel: (i >= 0 ? rel.slice(0, i + 1) : "") + name + (rel.endsWith(".md") ? ".md" : "") };
   }),
-  moveEntry: vi.fn(async (rel: string, dest: string) => `${dest ? dest + "/" : ""}${rel.split("/").pop()}`),
+  moveEntry: vi.fn(async (rel: string, dest: string) => ({ rel: `${dest ? dest + "/" : ""}${rel.split("/").pop()}` })),
   trashEntry: vi.fn(async () => {}),
   onFsChanged: vi.fn(async (cb: (p: string[]) => void) => {
     fsCb = cb;
@@ -272,8 +272,8 @@ describe("sidebar", () => {
   });
 
   it("double_enter_renames_once", async () => {
-    let release!: (v: string) => void;
-    vi.mocked(api.renameEntry).mockImplementationOnce(() => new Promise<string>((r) => (release = r)));
+    let release!: (v: api.Moved) => void;
+    vi.mocked(api.renameEntry).mockImplementationOnce(() => new Promise<api.Moved>((r) => (release = r)));
     const { el, sb } = await setup();
     await sb.newNote();
     await flush();
@@ -283,7 +283,7 @@ describe("sidebar", () => {
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     await flush();
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    release("Une fois.md");
+    release({ rel: "Une fois.md" });
     await flush();
     expect(api.renameEntry).toHaveBeenCalledTimes(1);
   });
@@ -365,6 +365,35 @@ describe("sidebar", () => {
     expect(api.moveEntry).not.toHaveBeenCalled();
     expect(handlers.onRenamed).not.toHaveBeenCalled();
     expect(onError.mock.calls.flat().join(" ")).toMatch(/Disque plein/);
+  });
+
+  it("move_with_warning_follows_new_path_and_shows_warning", async () => {
+    vi.mocked(api.moveEntry).mockResolvedValueOnce({ rel: "Projets/Courses.md", warning: "liens non mis à jour" });
+    const { row, handlers } = await setup();
+    const onError = vi.fn();
+    (handlers as any).onError = onError;
+    row("Projets").dispatchEvent(dnd("drop", "Courses.md"));
+    await flush();
+    expect(handlers.onRenamed).toHaveBeenCalledWith("Courses.md", "Projets/Courses.md");
+    expect(onError).toHaveBeenCalledWith("liens non mis à jour");
+  });
+
+  it("rename_with_warning_follows_new_path_and_shows_warning", async () => {
+    vi.mocked(api.renameEntry).mockResolvedValueOnce({ rel: "Courses2.md", warning: "liens non mis à jour" });
+    const { row, handlers, el } = await setup();
+    const onError = vi.fn();
+    (handlers as any).onError = onError;
+    row("Courses.md").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    const rename = vi.mocked(showContextMenu).mock.calls[0][2].find((i: any) => /renommer/i.test(i.label));
+    rename!.action();
+    await flush();
+    const input = el.querySelector("input.sb-rename") as HTMLInputElement;
+    input.value = "Courses2";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flush();
+    expect(handlers.onRenamed).toHaveBeenCalledWith("Courses.md", "Courses2.md");
+    expect(onError).toHaveBeenCalledWith("liens non mis à jour");
+    expect(el.querySelector("input.sb-rename")).toBeNull();
   });
 
   it("failed_move_releases_the_lock", async () => {

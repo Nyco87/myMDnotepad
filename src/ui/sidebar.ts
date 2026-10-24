@@ -366,11 +366,13 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
     let newPath: string;
     ed.committing = true;
     try {
-      newPath = await mutate(
+      const moved = await mutate(
         ed.path,
         () => api.renameEntry(ed.path, name),
-        (np) => handlers.onRenamed(ed.path, np),
+        (m) => handlers.onRenamed(ed.path, m.rel),
       );
+      newPath = moved.rel;
+      if (moved.warning) showError(moved.warning);
     } catch (e) {
       ed.committing = false;
       if (editing === ed) {
@@ -450,11 +452,13 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
     dragPath = null;
     if (!canMove(src, destDir)) return;
     try {
-      const newPath = await mutate(
+      const moved = await mutate(
         src,
         () => api.moveEntry(src, destDir),
-        (np) => handlers.onRenamed(src, np),
+        (m) => handlers.onRenamed(src, m.rel),
       );
+      const newPath = moved.rel;
+      if (moved.warning) showError(moved.warning);
       if (destDir) expanded.add(destDir);
       if (selected === src) selected = newPath;
       if (expanded.delete(src)) expanded.add(newPath);

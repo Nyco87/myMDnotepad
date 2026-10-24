@@ -30,12 +30,12 @@ pub fn create_folder(state: State<AppState>, dir_rel: String, name: String) -> R
 }
 
 #[tauri::command]
-pub fn rename_entry(state: State<AppState>, rel: String, new_name: String) -> Result<String, String> {
+pub fn rename_entry(state: State<AppState>, rel: String, new_name: String) -> Result<file_ops::Moved, String> {
     file_ops::rename_entry(&state.root()?, &rel, &new_name)
 }
 
 #[tauri::command]
-pub fn move_entry(state: State<AppState>, rel: String, dest_dir_rel: String) -> Result<String, String> {
+pub fn move_entry(state: State<AppState>, rel: String, dest_dir_rel: String) -> Result<file_ops::Moved, String> {
     file_ops::move_entry(&state.root()?, &rel, &dest_dir_rel)
 }
 
