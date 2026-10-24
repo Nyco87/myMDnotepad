@@ -20,3 +20,116 @@ body {
   height: 100%;
   background: var(--panel);
 }
+
+/* ---- Editor content ---- */
+.ProseMirror {
+  color: var(--text);
+  background: var(--editor-bg);
+  padding: 16px 24px;
+  min-height: 100%;
+  outline: none;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.ProseMirror h1, .ProseMirror h2, .ProseMirror h3,
+.ProseMirror h4, .ProseMirror h5, .ProseMirror h6 {
+  color: var(--text);
+  line-height: 1.25;
+  margin: 1.2em 0 0.5em;
+}
+.ProseMirror h1 { font-size: 2em; }
+.ProseMirror h2 { font-size: 1.6em; }
+.ProseMirror h3 { font-size: 1.3em; }
+.ProseMirror p { margin: 0.5em 0; }
+.ProseMirror a { color: var(--accent); }
+.ProseMirror blockquote {
+  margin: 0.8em 0;
+  padding: 0.1em 1em;
+  border-left: 3px solid var(--accent);
+  color: #bdbdbd;
+}
+.ProseMirror code {
+  font-family: "Cascadia Mono", Consolas, monospace;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+.ProseMirror pre {
+  font-family: "Cascadia Mono", Consolas, monospace;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  white-space: pre;
+}
+.ProseMirror pre code { background: none; padding: 0; }
+.ProseMirror hr { border: none; border-top: 1px solid var(--border); margin: 1.2em 0; }
+.ProseMirror img { max-width: 100%; }
+.ProseMirror ul, .ProseMirror ol { padding-left: 1.6em; }
+.ProseMirror ul[data-type="task_list"] { list-style: none; padding-left: 0.4em; }
+.ProseMirror li[data-type="task_item"]::before {
+  content: "\2610";
+  float: left;
+  margin-left: -1.4em;
+  color: var(--text);
+}
+.ProseMirror li[data-type="task_item"][data-checked="true"]::before {
+  content: "\2611";
+  color: var(--accent);
+}
+.ProseMirror li[data-type="task_item"] { margin-left: 1.4em; }
+.ProseMirror table {
+  border-collapse: collapse;
+  margin: 0.8em 0;
+  table-layout: fixed;
+  overflow: hidden;
+  color: var(--text);
+}
+.ProseMirror th, .ProseMirror td {
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  vertical-align: top;
+  position: relative;
+  min-width: 3em;
+}
+.ProseMirror th { background: rgba(255, 255, 255, 0.07); font-weight: 600; }
+.ProseMirror .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(96, 205, 255, 0.2);
+  pointer-events: none;
+}
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.ProseMirror.resize-cursor { cursor: col-resize; }
+.ProseMirror pre.raw-block {
+  color: #9a9a9a;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed var(--border);
+  user-select: none;
+}
+.ProseMirror .raw-inline {
+  font-family: "Cascadia Mono", Consolas, monospace;
+  color: #9a9a9a;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.ProseMirror .ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.ProseMirror-gapcursor:after { border-top: 1px solid var(--text); }

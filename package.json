@@ -14,9 +14,16 @@
     "@tauri-apps/api": "^2",
     "markdown-it": "^14.3.3",
     "markdown-it-task-lists": "^2.1.1",
+    "prosemirror-commands": "^1.7.2",
+    "prosemirror-dropcursor": "^1.8.4",
+    "prosemirror-gapcursor": "^1.4.1",
+    "prosemirror-history": "^1.5.1",
+    "prosemirror-keymap": "^1.2.3",
     "prosemirror-markdown": "^1.13.9",
     "prosemirror-model": "^1.25.12",
-    "prosemirror-tables": "^1.8.5"
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-tables": "^1.8.5",
+    "prosemirror-view": "^1.42.8"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
