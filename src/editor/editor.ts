@@ -9,6 +9,8 @@ import { columnResizing, tableEditing } from "prosemirror-tables";
 import type { Node as PMNode, Schema } from "prosemirror-model";
 import type { NodeViewConstructor } from "prosemirror-view";
 import { schema } from "../markdown/schema";
+import { buildInputRules } from "./input-rules";
+import { buildKeymap } from "./keymap";
 import { parseMarkdown } from "../markdown/parse";
 import { serializeMarkdown } from "../markdown/serialize";
 
@@ -32,9 +34,12 @@ export interface EditorOptions {
  * Plugin list. Later tasks extend this one place: input rules + keymap (task 8),
  * table controls (task 9), toolbar/image paste (task 10).
  */
-function buildPlugins(_schema: Schema): Plugin[] {
+function buildPlugins(schema: Schema): Plugin[] {
   return [
     history(),
+    buildInputRules(schema),
+    // Before baseKeymap: sticky-block Enter/ArrowDown must win over the defaults.
+    buildKeymap(schema),
     keymap(baseKeymap),
     dropCursor(),
     gapCursor(),
