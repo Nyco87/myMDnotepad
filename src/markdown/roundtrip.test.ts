@@ -144,3 +144,42 @@ describe("parse structure", () => {
     expect(img.attrs).toEqual({ src: "a.png", alt: "alt", title: "T" });
   });
 });
+
+describe("adjacent lists stay apart (review fix R6)", () => {
+  const types = (md: string) => {
+    const names: string[] = [];
+    parseMarkdown(md).forEach((n) => names.push(n.type.name + (n.attrs.tight === undefined ? "" : `:${n.childCount}`)));
+    return names.join(",");
+  };
+  const stable = (md: string, expected: string) => {
+    const once = pretty(md);
+    expect(once).toBe(expected);
+    expect(pretty(once)).toBe(once);
+    expect(types(once)).toBe(types(md));
+  };
+  test("bullet + loose bullet", () => stable("- a\n- b\n\n* c\n\n* d\n", "- a\n- b\n\n* c\n\n* d\n"));
+  test("task + bullet", () => stable("- [ ] t\n\n* b\n", "- [ ] t\n\n* b\n"));
+  test("bullet + task", () => stable("- a\n\n+ [ ] t\n", "- a\n\n* [ ] t\n"));
+  test("bullet + bullet (loose) alternate back to -", () =>
+    stable("- a\n\n- a2\n\n* b\n\n* b2\n\n+ c\n\n+ c2\n", "- a\n\n- a2\n\n* b\n\n* b2\n\n- c\n\n- c2\n"));
+  test("ordered + ordered uses 1)", () => stable("1. a\n\n1. a2\n\n1) b\n", "1. a\n\n1. a2\n\n1) b\n"));
+  test("ordered with start + loose ordered", () => stable("3. a\n\n4) b\n\n5) c\n", "3. a\n\n4) b\n\n1) c\n"));
+  test("task + loose task", () => stable("- [ ] a\n\n* [x] b\n\n* [ ] c\n", "- [ ] a\n\n* [x] b\n\n* [ ] c\n"));
+  // Two *tight* same-type lists are one list for the reader (brief: "* a\n+ b" → "- a\n- b").
+  test("tight same-type lists merge (task)", () => stable("- [ ] a\n\n* [x] b\n", "- [ ] a\n- [x] b\n"));
+  test("tight same-type lists merge (ordered)", () => stable("3. a\n4) b\n", "3. a\n1. b\n"));
+  test("lists separated by a paragraph keep -", () => stable("- a\n\np\n\n- b\n", "- a\n\np\n\n- b\n"));
+});
+
+describe("URLs are kept readable (review fix)", () => {
+  for (const md of [
+    "![s](images/schéma.png)\n",
+    "[w](https://fr.wikipedia.org/wiki/Économie)\n",
+    "<https://x.y/é>\n",
+    "![s](<images/mon image.png>)\n",
+    "[e](a%20b)\n",
+  ])
+    test(JSON.stringify(md), () => expect(pretty(md)).toBe(md));
+  test("image src attr is the readable path", () =>
+    expect(parseMarkdown("![s](images/schéma.png)\n").firstChild!.firstChild!.attrs.src).toBe("images/schéma.png"));
+});

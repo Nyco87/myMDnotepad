@@ -52,14 +52,26 @@ function titlePart(title: string | null): string {
   return title ? ' "' + title.replace(/"/g, '\\"') + '"' : "";
 }
 
+const BULLETISH = new Set(["bullet_list", "task_list"]);
+
 /**
- * Adjacent lists of the same type merge when re-parsed (only their markers,
- * which we normalise, told them apart), so write them as one list. This also
- * stops prosemirror-markdown from separating them with two blank lines.
+ * CommonMark only starts a new list when the marker changes ("-" vs "*",
+ * "1." vs "1)"); otherwise adjacent lists merge on re-parse (and a task list
+ * merged with a bullet list loses its checkboxes). So a list directly
+ * following a list of the same family uses the alternate marker; the next one
+ * switches back, and so on. Returns true when the alternate marker is needed.
  */
+function alternateMarker(node: Node, parent: Node, index: number): boolean {
+  const family = (n: Node | null) => (n ? (BULLETISH.has(n.type.name) ? "bullet" : n.type.name) : null);
+  let alternate = false;
+  for (let i = index - 1; i >= 0 && family(parent.child(i)) === family(node); i--) alternate = !alternate;
+  return alternate;
+}
+
 function list(state: State, node: Node, delim: string, firstDelim: (i: number) => string): void {
-  const prev = state.closed;
-  if (prev && prev.type === node.type) state.flushClose(prev.attrs.tight && node.attrs.tight ? 1 : 2);
+  // Upstream would separate two same-type lists by two blank lines; one is enough
+  // now that the marker keeps them apart.
+  if (state.closed && state.closed.type === node.type) state.flushClose(2);
   state.renderList(node, delim, firstDelim);
 }
 
@@ -114,13 +126,15 @@ const nodes: Record<string, NodeRule> = {
     state.closeBlock(node);
   },
 
-  bullet_list(state, node) {
-    list(state as State, node, "  ", () => "- ");
+  bullet_list(state, node, parent, index) {
+    const bullet = alternateMarker(node, parent, index) ? "* " : "- ";
+    list(state as State, node, "  ", () => bullet);
   },
 
-  ordered_list(state, node) {
-    const first = `${node.attrs.start}. `;
-    list(state as State, node, " ".repeat(first.length), (i) => (i === 0 ? first : "1. "));
+  ordered_list(state, node, parent, index) {
+    const sep = alternateMarker(node, parent, index) ? ")" : ".";
+    const first = `${node.attrs.start}${sep} `;
+    list(state as State, node, " ".repeat(first.length), (i) => (i === 0 ? first : `1${sep} `));
   },
 
   list_item(state, node) {
@@ -128,8 +142,9 @@ const nodes: Record<string, NodeRule> = {
     trimEmptyItem(state as State, node);
   },
 
-  task_list(state, node) {
-    list(state as State, node, "  ", (i) => (node.child(i).attrs.checked ? "- [x] " : "- [ ] "));
+  task_list(state, node, parent, index) {
+    const bullet = alternateMarker(node, parent, index) ? "*" : "-";
+    list(state as State, node, "  ", (i) => (node.child(i).attrs.checked ? `${bullet} [x] ` : `${bullet} [ ] `));
   },
 
   task_item(state, node) {

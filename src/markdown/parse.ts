@@ -3,7 +3,7 @@ import type StateCore from "markdown-it/lib/rules_core/state_core.mjs";
 import type Token from "markdown-it/lib/token.mjs";
 import taskLists from "markdown-it-task-lists";
 import { MarkdownParser } from "prosemirror-markdown";
-import type { Node } from "prosemirror-model";
+import { Fragment, type Node } from "prosemirror-model";
 import { schema } from "./schema";
 
 /**
@@ -107,6 +107,12 @@ function markEmptyTasks(state: StateCore): void {
 
 export const markdownIt = MarkdownIt("commonmark").enable("strikethrough").use(taskLists);
 markdownIt.core.ruler.after("github-task-lists", "mdnote-task-tokens", taskTokens);
+// Keep link/image destinations as written (after backslash unescaping) instead
+// of markdown-it's percent-encoded form: the file must not change on save
+// ("images/schéma.png" stays readable) and `<https://x.y/é>` stays an autolink.
+// Whoever loads a URL (editor, image view) encodes it if needed.
+markdownIt.normalizeLink = (url) => url;
+markdownIt.normalizeLinkText = (url) => url;
 
 /**
  * Token → schema mapping. Task 6 adds table and raw (html, front matter…)
@@ -147,6 +153,33 @@ export const parserTokens: ConstructorParameters<typeof MarkdownParser>[2] = {
 
 const parser = new MarkdownParser(schema, markdownIt, parserTokens);
 
+const LISTS = new Set(["bullet_list", "ordered_list", "task_list"]);
+
+/**
+ * Two adjacent *tight* lists of the same type differ only by their source
+ * marker ("* a
++ b"): they are one list for the reader, so merge them (the
+ * brief normalises "* a
++ b" to "- a
+- b"). Any other adjacent lists stay
+ * apart and the serializer keeps them apart with an alternate marker.
+ */
+function mergeTightLists(node: Node): Node {
+  if (node.isTextblock || node.isLeaf) return node;
+  const children: Node[] = [];
+  let changed = false;
+  node.forEach((child) => {
+    const merged = mergeTightLists(child);
+    if (merged !== child) changed = true;
+    const prev = children[children.length - 1];
+    if (prev && LISTS.has(merged.type.name) && prev.type === merged.type && prev.attrs.tight && merged.attrs.tight) {
+      children[children.length - 1] = prev.copy(prev.content.append(merged.content));
+      changed = true;
+    } else children.push(merged);
+  });
+  return changed ? node.copy(Fragment.from(children)) : node;
+}
+
 export function parseMarkdown(md: string): Node {
-  return parser.parse(md);
+  return mergeTightLists(parser.parse(md));
 }
