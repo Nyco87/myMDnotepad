@@ -149,10 +149,13 @@ export function createTabs(o: TabsOptions): TabsController {
     } as Partial<Tab> as Tab;
     tab.saver = createAutosaver(
       async (md) => {
-        await waitUnlocked(tab);
         // Une version externe en attente de copie bloque l'écriture (le contenu reste en file, pending() reste vrai).
-        if (!tab.closed && tab.conflicts.length > 0) await resolveConflicts(tab);
-        await waitUnlocked(tab);
+        // La condition est revérifiée de façon synchrone juste avant l'écriture : un verrou posé entre-temps relance l'attente.
+        for (;;) {
+          await waitUnlocked(tab);
+          if (!tab.closed && tab.conflicts.length > 0) await resolveConflicts(tab);
+          if (tab.closed || (tab.locks.size === 0 && tab.conflicts.length === 0)) break;
+        }
         if (tab.closed) return tab.lastKnownMtime; // onglet supprimé : ne jamais recréer le fichier
         tab.writing = md;
         try {

@@ -11,6 +11,7 @@ export default defineConfig(() => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
+  build: { target: "es2022", minify: true },
   // Unit tests run in Node by default; DOM tests opt in with `// @vitest-environment jsdom`.
   test: {
     environment: "node",

@@ -377,6 +377,11 @@ body {
 }
 .tab-new:hover { background: rgba(255, 255, 255, 0.08); }
 .titlebar-drag { flex: 1; min-width: 40px; }
+.titlebar-menu {
+  flex: none; align-self: center; width: 32px; height: 28px; margin-right: 4px; padding: 0; border: 0; border-radius: 4px;
+  background: transparent; color: #ccc; font: inherit; font-size: 16px; cursor: default;
+}
+.titlebar-menu:hover { background: rgba(255, 255, 255, 0.08); }
 .win-ctl { display: flex; flex: none; }
 .win-btn { width: 46px; padding: 0; border: 0; background: transparent; color: #ccc; font: inherit; cursor: default; }
 .win-btn:hover { background: rgba(255, 255, 255, 0.08); }
@@ -389,3 +394,17 @@ body {
   border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); color: var(--text); font-size: 12px; line-height: 1.4;
 }
 .toast[hidden] { display: none; }
+
+/* ---- First run ---- */
+.first-run { max-width: 460px; margin: 12vh auto 0; text-align: center; color: var(--text); }
+.first-run h1 { margin: 0 0 16px; font-size: 22px; font-weight: 600; }
+.first-run p { margin: 12px 0 0; font-size: 13px; line-height: 1.5; color: #aaa; }
+.first-run .first-run-missing { color: #e0a96d; }
+.first-run .first-run-error { color: #f28b82; }
+.first-run [hidden] { display: none; }
+.first-run-btn {
+  margin-top: 20px; padding: 8px 18px; border: 0; border-radius: 6px; background: var(--accent); color: #06232f;
+  font: inherit; cursor: pointer;
+}
+.first-run-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.first-run-btn:disabled { opacity: 0.6; cursor: default; }

@@ -34,6 +34,11 @@ export function rootStatus(): Promise<RootStatus> {
   return invoke<RootStatus>("root_status");
 }
 
+/** Signale au backend que l'interface est affichée (mesure du temps de démarrage). */
+export function markReady(): Promise<void> {
+  return invoke<void>("mark_ready");
+}
+
 export function setWindowEffect(effect: WindowEffect): Promise<void> {
   return invoke<void>("set_window_effect", { effect });
 }

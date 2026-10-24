@@ -9,14 +9,33 @@ mod window_fx;
 
 use settings::AppState;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 use tauri::Manager;
+
+static START: OnceLock<Instant> = OnceLock::new();
+
+/// Appelée par le frontend quand l'onglet actif (ou l'écran de premier lancement) est affiché :
+/// écrit `startup_ms=<n>` sur stdout et dans `%TEMP%\mdnote-startup.log`.
+#[tauri::command]
+fn mark_ready() {
+    use std::io::Write;
+    let ms = START.get().map(|s| s.elapsed().as_millis()).unwrap_or(0);
+    println!("startup_ms={ms}");
+    let _ = std::io::stdout().flush();
+    let log = std::env::temp_dir().join("mdnote-startup.log");
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(log) {
+        let _ = writeln!(f, "startup_ms={ms}");
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let _ = START.set(Instant::now());
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            mark_ready,
             window_fx::set_window_effect,
             settings::get_settings,
             settings::save_settings,

@@ -12,6 +12,8 @@ export interface TitlebarHandlers {
   onActivate(rel: string): void;
   onClose(rel: string): void;
   onNew(): void;
+  /** Clic sur le bouton « ⋯ » : `anchor` est son rectangle (pour placer le menu). */
+  onMenu?(anchor: DOMRect): void;
 }
 
 export interface TitlebarHandle {
@@ -43,6 +45,15 @@ export function mountTitlebar(el: HTMLElement, h: TitlebarHandlers): TitlebarHan
   drag.className = "titlebar-drag";
   drag.setAttribute("data-tauri-drag-region", "");
 
+  const menuBtn = document.createElement("button");
+  menuBtn.type = "button";
+  menuBtn.className = "titlebar-menu";
+  menuBtn.textContent = "⋯";
+  menuBtn.title = "Menu";
+  menuBtn.setAttribute("aria-label", "Menu");
+  menuBtn.setAttribute("aria-haspopup", "menu");
+  menuBtn.addEventListener("click", () => h.onMenu?.(menuBtn.getBoundingClientRect()));
+
   const ctl = document.createElement("div");
   ctl.className = "win-ctl";
   const winBtn = (label: string, title: string, cls: string, act: () => Promise<void>): HTMLButtonElement => {
@@ -61,7 +72,7 @@ export function mountTitlebar(el: HTMLElement, h: TitlebarHandlers): TitlebarHan
     winBtn("✕", "Fermer", "win-close", () => getCurrentWindow().close()),
   );
 
-  el.append(strip, drag, ctl);
+  el.append(strip, drag, menuBtn, ctl);
 
   const renderTab = (t: TabView): HTMLElement => {
     const tab = document.createElement("div");

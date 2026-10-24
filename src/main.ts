@@ -4,13 +4,18 @@ import {
   getSettings,
   onFsChanged,
   readNote,
+  markReady,
   rootStatus,
   saveSettings,
+  setWindowEffect,
   writeNote,
   type RootStatus,
   type Settings,
+  type WindowEffect,
 } from "./api";
 import { createEditor } from "./editor/editor";
+import { showContextMenu } from "./ui/context-menu";
+import { showFirstRun } from "./ui/first-run";
 import { mountSidebar, type SidebarHandle } from "./ui/sidebar";
 import { createTabs, noteTitle, type TabsController } from "./ui/tabs";
 import { mountTitlebar } from "./ui/titlebar";
@@ -19,6 +24,8 @@ import { mountToolbar, type ToolbarHandle } from "./ui/toolbar";
 
 /** Délai pendant lequel une seconde demande de fermeture ferme malgré un échec d'enregistrement. */
 const FORCE_CLOSE_MS = 5000;
+/** Clé de sessionStorage : relance l'écran de choix du dossier après « Changer de dossier de notes… ». */
+const CHANGE_ROOT_KEY = "mdnote.changeRoot";
 
 const errText = (e: unknown): string => (typeof e === "string" ? e : e instanceof Error ? e.message : String(e));
 
@@ -97,7 +104,49 @@ async function main(): Promise<void> {
     },
     onClose: (rel) => void tabs?.close(rel).then(focusEditor),
     onNew: () => void sidebar?.newNote(),
+    onMenu: (r) => openMenu(r),
   });
+
+  // ---- Menu « ⋯ » ----
+  let currentEffect: WindowEffect = "acrylic";
+  const changeRoot = async (): Promise<void> => {
+    try {
+      await tabs?.flushAll();
+    } catch (e) {
+      toast(`Certaines notes n'ont pas pu être enregistrées, le dossier n'a pas été changé (${errText(e)}).`);
+      return;
+    }
+    try {
+      restoring = true; // plus aucune écriture de session pendant le changement
+      const s = await getSettings();
+      await saveSettings({ ...s, open_tabs: [], active_tab: null });
+      sessionStorage.setItem(CHANGE_ROOT_KEY, "1");
+    } catch (e) {
+      restoring = false;
+      toast(`Changement de dossier impossible : ${errText(e)}`);
+      return;
+    }
+    location.reload(); // ferme les onglets et repart sur l'écran de premier lancement
+  };
+  const setEffect = async (effect: WindowEffect): Promise<void> => {
+    if (effect === currentEffect) return;
+    try {
+      await setWindowEffect(effect);
+      currentEffect = effect;
+      const s = await getSettings();
+      await saveSettings({ ...s, window_effect: effect });
+    } catch (e) {
+      toast(`Effet de fenêtre impossible : ${errText(e)}`);
+    }
+  };
+  function openMenu(anchor: DOMRect): void {
+    const mark = (e: WindowEffect, label: string): string => `${currentEffect === e ? "✓ " : "   "}Effet de fenêtre : ${label}`;
+    showContextMenu(anchor.left, anchor.bottom + 2, [
+      { label: "Changer de dossier de notes…", action: () => void changeRoot() },
+      { label: mark("acrylic", "Acrylique"), action: () => void setEffect("acrylic") },
+      { label: mark("mica", "Mica"), action: () => void setEffect("mica") },
+    ]);
+  }
 
   const onTabsChange = (): void => {
     if (!tabs) return;
@@ -116,17 +165,22 @@ async function main(): Promise<void> {
 
   // ---- Fermeture : tout enregistrer d'abord ----
   let forceCloseUntil = 0;
+  let forceNext = false; // l'enregistrement dure trop longtemps : la prochaine demande ferme quand même
   let closing = false;
   const destroy = (): Promise<void> => win.destroy().catch((e) => toast(`Fermeture impossible : ${errText(e)}`));
   void win
     .onCloseRequested(async (event) => {
       event.preventDefault();
-      if (Date.now() < forceCloseUntil) {
-        await destroy(); // seconde demande après un échec : on ferme quand même
+      if (forceNext || Date.now() < forceCloseUntil) {
+        await destroy(); // seconde demande après un échec ou un enregistrement trop long : on ferme quand même
         return;
       }
       if (closing) return; // une fermeture est déjà en cours
       closing = true;
+      const slow = setTimeout(() => {
+        forceNext = true;
+        toast("L'enregistrement est long. Fermez à nouveau pour quitter quand même.");
+      }, FORCE_CLOSE_MS);
       try {
         try {
           await tabs?.flushAll();
@@ -138,6 +192,7 @@ async function main(): Promise<void> {
         await persist(); // sans effet tant que la restauration n'est pas finie : la session d'origine reste en place
         await destroy();
       } finally {
+        clearTimeout(slow);
         closing = false;
       }
     })
@@ -170,23 +225,18 @@ async function main(): Promise<void> {
     true,
   );
 
-  try {
-    // ---- Réglages et dossier racine ----
-    let settings: Settings | null = null;
-    let status: RootStatus = "unset";
-    try {
-      settings = await getSettings();
-      status = settings.root_dir ? await rootStatus() : "unset";
-    } catch (e) {
-      toast(`Réglages illisibles : ${errText(e)}`);
-    }
-    if (!settings || status !== "ok") {
-      // Écran de premier lancement : tâche 13.
-      app.classList.add("no-root");
-      ui.emptyState.textContent = "Aucun dossier de notes";
-      titlebar.render([]);
-      return;
-    }
+  let readyCalled = false;
+  const ready = (): void => {
+    if (readyCalled) return;
+    readyCalled = true;
+    void markReady().catch((e) => console.error(e));
+  };
+
+  /** Monte l'espace de travail (onglets, bandeau, arborescence) pour le dossier courant. */
+  const startWorkspace = async (settings: Settings): Promise<void> => {
+    app.classList.remove("no-root");
+    currentEffect = settings.window_effect ?? "acrylic";
+    ui.emptyState.hidden = false;
     ui.emptyState.textContent = "Aucune note ouverte — Ctrl+N pour en créer une";
 
     tabs = createTabs({
@@ -223,17 +273,51 @@ async function main(): Promise<void> {
     const restore = tabs.restore(settings.open_tabs ?? [], settings.active_tab);
     await restore.active;
     focusEditor();
+    ready();
     void sidebar.refresh();
     void restore.all.finally(() => {
       restoring = false;
       void persist();
     });
+  };
+
+  try {
+    // ---- Réglages et dossier racine (en parallèle) ----
+    let settings: Settings | null = null;
+    let status: RootStatus = "unset";
+    try {
+      [settings, status] = await Promise.all([getSettings(), rootStatus()]);
+    } catch (e) {
+      toast(`Réglages illisibles : ${errText(e)}`);
+    }
+    let forceChange = false;
+    try {
+      forceChange = sessionStorage.getItem(CHANGE_ROOT_KEY) === "1";
+      sessionStorage.removeItem(CHANGE_ROOT_KEY);
+    } catch {
+      /* stockage indisponible : on ignore */
+    }
+    if (settings) currentEffect = settings.window_effect ?? "acrylic";
+
+    if (!settings || forceChange || status !== "ok") {
+      // Premier lancement, dossier introuvable ou changement de dossier.
+      app.classList.add("no-root");
+      titlebar.render([]);
+      const reason = status === "missing" && !forceChange ? "missing" : "unset";
+      const shown = showFirstRun(ui.emptyState, reason, settings?.root_dir ?? undefined);
+      ready();
+      await shown;
+      // Nouveau dossier : les onglets de l'ancien ne s'y appliquent pas.
+      settings = { ...(await getSettings()), open_tabs: [], active_tab: null };
+    }
+    await startWorkspace(settings);
   } catch (e) {
     // La barre de titre (boutons de fenêtre) reste utilisable ; l'erreur s'affiche à la place de l'éditeur.
     console.error(e);
     app.classList.add("no-root");
     ui.emptyState.hidden = false;
     ui.emptyState.textContent = `Erreur au démarrage : ${errText(e)}`;
+    ready();
   }
 }
 
