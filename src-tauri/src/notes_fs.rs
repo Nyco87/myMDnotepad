@@ -4,19 +4,26 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
+#[derive(Serialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum Kind {
+    Folder,
+    Note,
+}
+
 #[derive(Serialize, Clone, Debug)]
 pub struct TreeNode {
     pub name: String,
-    pub rel: String,
-    pub is_dir: bool,
-    pub children: Vec<TreeNode>,
+    pub path: String,
+    pub kind: Kind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children: Option<Vec<TreeNode>>,
 }
 
 #[derive(Serialize, Clone, Debug)]
 pub struct NoteFile {
-    pub rel: String,
     pub content: String,
-    pub mtime: u64,
+    pub mtime_ms: u64,
 }
 
 pub fn is_md(p: &Path) -> bool {
@@ -66,14 +73,14 @@ fn build(dir: &Path, root: &Path, name: String) -> TreeNode {
                 folders.push(build(&p, root, fname));
             } else if ft.is_file() && is_md(&p) && !fname.starts_with('.') {
                 let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or(fname);
-                notes.push(TreeNode { name: stem, rel: to_rel(root, &p), is_dir: false, children: vec![] });
+                notes.push(TreeNode { name: stem, path: to_rel(root, &p), kind: Kind::Note, children: None });
             }
         }
     }
     folders.sort_by_key(|n| n.name.to_lowercase());
     notes.sort_by_key(|n| n.name.to_lowercase());
     folders.extend(notes);
-    TreeNode { name, rel: to_rel(root, dir), is_dir: true, children: folders }
+    TreeNode { name, path: to_rel(root, dir), kind: Kind::Folder, children: Some(folders) }
 }
 
 pub fn list_tree(root: &Path) -> Result<TreeNode, String> {
@@ -89,7 +96,7 @@ pub fn read_note(root: &Path, rel: &str) -> Result<NoteFile, String> {
     let bytes = fs::read(&p).map_err(|e| format!("Impossible de lire la note : {e}"))?;
     let text = String::from_utf8_lossy(&bytes);
     let text = text.strip_prefix('\u{feff}').unwrap_or(&text).replace("\r\n", "\n");
-    Ok(NoteFile { rel: rel.to_string(), content: text, mtime: mtime_ms(&p) })
+    Ok(NoteFile { content: text, mtime_ms: mtime_ms(&p) })
 }
 
 pub fn write_note(root: &Path, rel: &str, content: &str) -> Result<u64, String> {
@@ -117,9 +124,10 @@ mod tests {
         fs::write(r.join("Dossier/n.md"), "").unwrap();
         fs::create_dir_all(r.join("Vide")).unwrap();
         let t = list_tree(r).unwrap();
-        let names: Vec<_> = t.children.iter().map(|c| c.name.as_str()).collect();
+        let kids = t.children.as_ref().unwrap();
+        let names: Vec<_> = kids.iter().map(|c| c.name.as_str()).collect();
         assert_eq!(names, ["Dossier", "Vide", "A", "b"]);
-        assert_eq!(t.children[0].children[0].rel, "Dossier/n.md");
+        assert_eq!(kids[0].children.as_ref().unwrap()[0].path, "Dossier/n.md");
     }
     #[test] fn read_note_normalizes_crlf_and_bom() {
         let d = tempdir().unwrap();

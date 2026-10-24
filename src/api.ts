@@ -43,8 +43,8 @@ export function resolveAsset(rel: string): string {
   return convertFileSrc(`${base}/${rel}`);
 }
 
-export type TreeNode = { name: string; rel: string; is_dir: boolean; children: TreeNode[] };
-export type NoteFile = { rel: string; content: string; mtime: number };
+export type TreeNode = { name: string; path: string; kind: "folder" | "note"; children?: TreeNode[] };
+export type NoteFile = { content: string; mtime_ms: number };
 
 export function listTree(): Promise<TreeNode> {
   return invoke<TreeNode>("list_tree");
@@ -59,8 +59,8 @@ export function writeNote(rel: string, content: string): Promise<number> {
 export function createNote(dirRel: string, baseName: string): Promise<string> {
   return invoke<string>("create_note", { dirRel, baseName });
 }
-export function createFolder(dirRel: string, name: string): Promise<string> {
-  return invoke<string>("create_folder", { dirRel, name });
+export function createFolder(dirRel: string, baseName: string): Promise<string> {
+  return invoke<string>("create_folder", { dirRel, name: baseName });
 }
 export function renameEntry(rel: string, newName: string): Promise<string> {
   return invoke<string>("rename_entry", { rel, newName });
