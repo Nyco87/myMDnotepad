@@ -41,19 +41,56 @@ function escapeInline(text: string): string {
 }
 
 /**
- * `==` that could open or close a highlight on re-parse is escaped (`\=\=`), so literal text never turns into a mark:
- * not between spaces, and not inside a word (`a==b`, `x == y` stay as typed).
+ * `==` runs that could pair into a highlight on re-parse are escaped (`\=\=`), so literal text never turns into a
+ * mark. A run is only escaped when it can pair: an opening-capable run needs a closing-capable run after it in the
+ * same textblock, and a closing-capable run an opening-capable one before it (`dGVzdA== tail`, `x ==`, `a ==b`
+ * stay as typed). Flanking follows markdown-it's `scanDelims` for a `_`-like delimiter; the textblock edges and hard
+ * breaks count as whitespace, any other neighbouring inline node is unknown (both open and close, to stay safe).
  */
-function escapeHighlight(text: string): string {
-  return text.replace(/={2,}/g, (run, offset: number) => {
-    const prev = text[offset - 1];
-    const next = text[offset + run.length];
-    const space = (c: string | undefined): boolean => c !== undefined && /\s/.test(c);
-    const wordy = (c: string | undefined): boolean => c !== undefined && /[\p{L}\p{N}]/u.test(c);
-    if (space(prev) && space(next)) return run;
-    if (wordy(prev) && wordy(next)) return run;
-    return run.replace(/=/g, "\\=");
+interface HlRun { canOpen: boolean; canClose: boolean }
+const hlCache = new WeakMap<Node, boolean[][]>();
+
+function hlEscapes(parent: Node): boolean[][] {
+  const hit = hlCache.get(parent);
+  if (hit) return hit;
+  const WS = /\s/;
+  const PUNCT = /[\p{P}\p{S}]/u;
+  const runs: { child: number; run: HlRun }[] = [];
+  parent.forEach((child, _off, i) => {
+    if (!child.isText || child.marks.some((m) => m.type.name === "code")) return;
+    const text = child.text!;
+    const edge = (sibling: Node | null | undefined): string | null =>
+      !sibling || sibling.type.name === "hard_break" ? " " : null; // null: unknown neighbour
+    for (const m of text.matchAll(/={2,}/g)) {
+      const at = m.index!;
+      const prev = at > 0 ? text[at - 1] : edge(i > 0 ? parent.child(i - 1) : null);
+      const nextAt = at + m[0].length;
+      const next = nextAt < text.length ? text[nextAt] : edge(i + 1 < parent.childCount ? parent.child(i + 1) : null);
+      if (prev === null || next === null) {
+        runs.push({ child: i, run: { canOpen: true, canClose: true } });
+        continue;
+      }
+      const ws = (c: string): boolean => WS.test(c);
+      const pu = (c: string): boolean => PUNCT.test(c);
+      const left = !ws(next) && (!pu(next) || ws(prev) || pu(prev));
+      const right = !ws(prev) && (!pu(prev) || ws(next) || pu(next));
+      runs.push({ child: i, run: { canOpen: left && (!right || pu(prev)), canClose: right && (!left || pu(next)) } });
+    }
   });
+  const out: boolean[][] = [];
+  runs.forEach(({ child, run }, k) => {
+    const escape =
+      (run.canOpen && runs.slice(k + 1).some((r) => r.run.canClose)) ||
+      (run.canClose && runs.slice(0, k).some((r) => r.run.canOpen));
+    (out[child] ??= []).push(escape);
+  });
+  hlCache.set(parent, out);
+  return out;
+}
+
+function escapeHighlight(text: string, decisions: boolean[] | undefined): string {
+  let k = 0;
+  return text.replace(/={2,}/g, (run) => (decisions?.[k++] ? run.replace(/=/g, "\\=") : run));
 }
 
 /** First paragraphs of the blockquotes being written (see `keepQuoteMarker`). */
@@ -316,7 +353,7 @@ const nodes: Record<string, NodeRule> = {
     }
     const afterBreak = isBreak(parent.maybeChild(index - 1)) && parent.type.name !== "heading";
     const lineStart = afterBreak || s.atBlockStart;
-    let out = escapeHighlight(escapeInline(state.esc(noNul(node.text!), lineStart)));
+    let out = escapeHighlight(escapeInline(state.esc(noNul(node.text!), lineStart)), hlEscapes(parent)[index]);
     if (index === 0 && quoteStarts.has(parent)) out = keepQuoteMarker(out, node.text!);
     if (lineStart) out = escapeLineStart(out, afterBreak);
     state.text(out, false);

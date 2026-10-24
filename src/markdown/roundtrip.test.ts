@@ -193,6 +193,18 @@ describe("highlight ==text==", () => {
     expect(pretty("`a==b==c` and\n\n```\n==x==\n```\n")).toBe("`a==b==c` and\n\n```\n==x==\n```\n"));
   test("parsed highlight is a mark", () =>
     expect(parseMarkdown("==x==\n").firstChild!.firstChild!.marks[0].type.name).toBe("highlight"));
+  test("closing-capable == without opener is not escaped", () => {
+    expect(pretty("dGVzdA== tail\n")).toBe("dGVzdA== tail\n");
+    expect(pretty("x ==\n")).toBe("x ==\n");
+    expect(pretty("a ==b\n")).toBe("a ==b\n");
+    expect(pretty("x ==\nb\n")).toBe("x ==\nb\n");
+  });
+  test("literal pair that would re-parse as a mark stays escaped and idempotent", () => {
+    const once = pretty("a \\=\\=b c\\=\\= d\n");
+    expect(once).toBe("a \\=\\=b c\\=\\= d\n");
+    expect(parseMarkdown(once).firstChild!.childCount).toBe(1);
+    expect(pretty(once)).toBe(once);
+  });
   test("escaped == is text and stays escaped (no accidental highlight)", () => {
     expect(parseMarkdown("\\=\\=x\\=\\=\n").firstChild!.firstChild!.marks.length).toBe(0);
     expect(pretty("\\=\\=x\\=\\=\n")).toBe("\\=\\=x\\=\\=\n");
