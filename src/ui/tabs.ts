@@ -1,6 +1,7 @@
 import type { NoteFile } from "../api";
 import type { EditorHandle, EditorOptions } from "../editor/editor";
 import { createAutosaver, type Autosaver } from "../editor/autosave";
+import { confirmDialog } from "./confirm-dialog";
 
 /** Accès disque utilisé par les onglets (injecté : `api` dans l'app, une fausse implémentation dans les tests). */
 export interface TabsIO {
@@ -20,6 +21,8 @@ export interface TabsOptions {
   now?: () => Date;
   /** Message pour l'utilisateur (erreur, conflit). `sticky` : reste affiché jusqu'au clic (avis de conflit). */
   notify?: (message: string, opts?: { sticky?: boolean }) => void;
+  /** Confirmation avant d'abandonner les modifications d'une note illisible (défaut : modale sombre). */
+  confirmDiscard?: (message: string, okLabel: string) => Promise<boolean>;
   /** Liste, onglet actif, marque « introuvable » ou contenu remplacé : la barre de titre/le bandeau doivent se mettre à jour. */
   onChange?: () => void;
 }
@@ -123,12 +126,24 @@ export function conflictName(rel: string, at: Date): { dir: string; base: string
 const under = (rel: string, prefix: string): boolean => rel === prefix || rel.startsWith(prefix + "/");
 
 export function createTabs(o: TabsOptions): TabsController {
+  const askDiscard = o.confirmDiscard ?? ((m: string, ok: string) => confirmDialog(m, ok, "Annuler"));
+  const unreadableMessage = (rel: string): string =>
+    `La note « ${noteTitle(rel)} » ne peut pas être lue sur le disque : ses modifications sont gardées en mémoire.`;
+  /** Note illisible avec des modifications en attente : demande s'il faut les abandonner (true = abandonnées). */
+  const discardUnreadable = async (tab: Tab, ok: string, question: string): Promise<boolean> => {
+    if (tab.unreadable === null || !tab.saver.pending()) return true;
+    if (!(await askDiscard(`${unreadableMessage(tab.rel)} ${question}`, ok))) return false;
+    tab.saver.discard();
+    return true;
+  };
   /** Message pour un enregistrement raté ; rien pour une note illisible (le bandeau l'explique déjà). */
   const saveFailure = (rel: string, e: unknown): string | null => {
     if (e instanceof ConflictGiveUp) return e.message;
     if (errText(e) === UNREADABLE || (e instanceof Error && e.message === UNREADABLE)) return null;
     return `Enregistrement de « ${noteTitle(rel)} » impossible : ${errText(e)}`;
   };
+  /** Texte d'erreur lisible : « UNREADABLE » devient une phrase française. */
+  const friendly = (rel: string, e: unknown): string => (errText(e) === UNREADABLE ? unreadableMessage(rel) : errText(e));
   const reportSave = (rel: string, e: unknown): void => {
     const m = saveFailure(rel, e);
     if (m) notify(m);
@@ -426,6 +441,7 @@ export function createTabs(o: TabsOptions): TabsController {
     async close(rel) {
       const tab = find(rel);
       if (!tab) return true;
+      if (!(await discardUnreadable(tab, "Fermer sans enregistrer", "Fermer sans enregistrer ?"))) return false;
       try {
         // Des frappes pendant l'enregistrement peuvent remettre du contenu en file : on recommence (borné).
         for (let i = 0; i < 5 && (tab.saver.pending() || tab.conflicts.length > 0); i++) {
@@ -433,7 +449,7 @@ export function createTabs(o: TabsOptions): TabsController {
           await settleConflicts(tab);
         }
       } catch (e) {
-        notify(`« ${noteTitle(tab.rel)} » n'a pas pu être enregistrée, l'onglet reste ouvert : ${errText(e)}`);
+        notify(`« ${noteTitle(tab.rel)} » n'a pas pu être enregistrée, l'onglet reste ouvert : ${friendly(tab.rel, e)}`);
         return false;
       }
       if (tab.saver.pending() || tab.conflicts.length > 0) {
@@ -477,6 +493,11 @@ export function createTabs(o: TabsOptions): TabsController {
     },
 
     async flushAll() {
+      for (const t of tabs.slice()) {
+        if (!(await discardUnreadable(t, "Fermer sans enregistrer", "Fermer sans enregistrer ?"))) {
+          throw new Error(unreadableMessage(t.rel));
+        }
+      }
       const results = await Promise.allSettled(
         tabs.map(async (t) => {
           await t.saver.flush();
@@ -484,7 +505,7 @@ export function createTabs(o: TabsOptions): TabsController {
         }),
       );
       const failed = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
-      if (failed) throw failed.reason;
+      if (failed) throw new Error(friendly("", failed.reason));
     },
 
     list: () => tabs.map((t) => t.rel),
@@ -515,10 +536,13 @@ export function createTabs(o: TabsOptions): TabsController {
       // (anciens liens d'images). Si l'enregistrement échoue, on refuse : l'appelant annule l'opération.
       const held = tabs.filter((t) => under(t.rel, prefix));
       for (const t of held) {
+        if (!(await discardUnreadable(t, "Continuer sans enregistrer", "Continuer sans enregistrer ?"))) {
+          throw new Error(`${unreadableMessage(t.rel)} Opération annulée.`);
+        }
         try {
           await t.saver.flush();
         } catch (e) {
-          throw new Error(`« ${noteTitle(t.rel)} » n'a pas pu être enregistrée, opération annulée : ${errText(e)}`);
+          throw new Error(`« ${noteTitle(t.rel)} » n'a pas pu être enregistrée, opération annulée : ${friendly(t.rel, e)}`);
         }
       }
       let unlock!: () => void;

@@ -39,6 +39,8 @@ function fakeEditor(_mount: HTMLElement, opts: EditorOptions): EditorHandle {
   return h;
 }
 
+let confirmDiscard: Mock<(message: string, okLabel: string) => Promise<boolean>>;
+
 function setup(extra: { delay?: number } = {}): TabsController {
   const host = document.createElement("div");
   document.body.appendChild(host);
@@ -48,6 +50,7 @@ function setup(extra: { delay?: number } = {}): TabsController {
     makeEditor: fakeEditor,
     autosaveDelayMs: extra.delay ?? 10_000,
     now: () => new Date(2026, 9, 24, 18, 30),
+    confirmDiscard,
     notify: (m, opts) => {
       messages.push(m);
       if (opts?.sticky) stickyMessages.push(m);
@@ -56,6 +59,7 @@ function setup(extra: { delay?: number } = {}): TabsController {
 }
 
 beforeEach(() => {
+  confirmDiscard = vi.fn(async () => true);
   disk = new Map();
   clock = 1000;
   editors = new Map();
@@ -257,6 +261,7 @@ describe("tabs controller", () => {
     await tabs.externalChange(["a.md"]);
     expect(tabs.isUnreadable("a.md")).toBe(true);
     editors.get("a.md")!.type("local");
+    confirmDiscard.mockResolvedValue(false); // l'utilisateur garde ses modifications
     await tabs.flushAll().catch(() => {});
     expect(io.writeNote).not.toHaveBeenCalled();
     const banner = document.querySelector(".note-banner") as HTMLElement;
@@ -272,6 +277,48 @@ describe("tabs controller", () => {
     expect(banner.hidden).toBe(true);
     expect([...disk.keys()].some((k) => k.includes("(conflit"))).toBe(true);
     expect(io.writeNote).toHaveBeenCalledWith("a.md", "local", mtime);
+  });
+
+  async function unreadableWithEdits(): Promise<TabsController> {
+    const tabs = setup();
+    put("a.md", "x");
+    await tabs.open("a.md");
+    io.readNote.mockImplementation(async () => {
+      throw NOT_UTF8;
+    });
+    await tabs.externalChange(["a.md"]);
+    editors.get("a.md")!.type("local");
+    return tabs;
+  }
+
+  it("unreadable_tab_close_asks_then_discards", async () => {
+    const tabs = await unreadableWithEdits();
+    expect(await tabs.close("a.md")).toBe(true);
+    expect(confirmDiscard).toHaveBeenCalledTimes(1);
+    expect(confirmDiscard.mock.calls[0][0]).toContain("ne peut pas être lue sur le disque");
+    expect(tabs.list()).toEqual([]);
+    expect(io.writeNote).not.toHaveBeenCalled();
+    expect(messages.join()).not.toContain("UNREADABLE");
+  });
+
+  it("unreadable_tab_close_cancelled_keeps_tab", async () => {
+    const tabs = await unreadableWithEdits();
+    confirmDiscard.mockResolvedValue(false);
+    expect(await tabs.close("a.md")).toBe(false);
+    expect(tabs.list()).toEqual(["a.md"]);
+  });
+
+  it("unreadable_flushAll_and_lockUnder_use_french_message_and_confirm", async () => {
+    const tabs = await unreadableWithEdits();
+    confirmDiscard.mockResolvedValue(false);
+    await expect(tabs.flushAll()).rejects.toThrow(/ne peut pas être lue sur le disque/);
+    await expect(tabs.lockUnder("a.md")).rejects.toThrow(/ne peut pas être lue sur le disque/);
+    confirmDiscard.mockResolvedValue(true);
+    await expect(tabs.flushAll()).resolves.toBeUndefined();
+    editors.get("a.md")!.type("again");
+    const unlock = await tabs.lockUnder("a.md");
+    unlock();
+    expect(io.writeNote).not.toHaveBeenCalled();
   });
 
   it("unreadable_note_is_retried_on_each_fs_change", async () => {

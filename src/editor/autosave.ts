@@ -11,6 +11,8 @@ export interface Autosaver {
    * baseline: the next schedule() always writes.
    */
   markSaved(md: string | null): void;
+  /** Abandons the queued content (timer included); a write already in flight is not affected. */
+  discard(): void;
 }
 
 /**
@@ -84,6 +86,13 @@ export function createAutosaver(
     lastSaved: () => saved,
     markSaved(md) {
       saved = md;
+    },
+    discard() {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      queued = null;
     },
   };
 }
