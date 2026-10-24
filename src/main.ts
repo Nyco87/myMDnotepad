@@ -12,6 +12,7 @@ import {
   type Settings,
 } from "./api";
 import { createEditor } from "./editor/editor";
+import { initAccent } from "./ui/accent";
 import { showContextMenu } from "./ui/context-menu";
 import { showFirstRun } from "./ui/first-run";
 import { mountSidebar, type SidebarHandle } from "./ui/sidebar";
@@ -61,6 +62,7 @@ async function main(): Promise<void> {
   const ui = buildLayout(app);
   const toast = mountToast(document.body);
   const win = getCurrentWindow();
+  void initAccent(); // sans attendre : la couleur Windows s'applique dès qu'elle est lue, le repli CSS sert d'ici là
 
   let tabs: TabsController | null = null;
   let toolbar: ToolbarHandle | null = null;

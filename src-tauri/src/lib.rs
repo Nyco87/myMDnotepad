@@ -1,3 +1,4 @@
+mod accent;
 mod commands;
 mod file_ops;
 mod images;
@@ -36,6 +37,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             mark_ready,
+            accent::get_accent_color,
             settings::get_settings,
             settings::save_settings,
             settings::set_root,
@@ -74,6 +76,8 @@ pub fn run() {
                 let handle = app.handle().clone();
                 app.state::<AppState>().restart_watcher(&handle, std::path::Path::new(&r));
             }
+
+            accent::install(app.handle());
 
             let window = app
                 .get_webview_window("main")

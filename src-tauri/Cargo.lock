@@ -1816,6 +1816,7 @@ dependencies = [
  "tempfile",
  "trash",
  "window-vibrancy 0.6.0",
+ "windows",
 ]
 
 [[package]]

@@ -94,3 +94,12 @@ export function importImage(noteRel: string, srcAbs: string): Promise<string> {
 export function onFsChanged(cb: (paths: string[]) => void): Promise<() => void> {
   return listen<{ paths: string[] }>("fs-changed", (e) => cb(e.payload.paths));
 }
+
+/** Couleur d'accent de Windows, `#rrggbb`. */
+export function getAccentColor(): Promise<string> {
+  return invoke<string>("get_accent_color");
+}
+/** S'abonne aux changements de l'accent de Windows (événement `accent-changed`). */
+export function onAccentChanged(cb: (hex: string) => void): Promise<() => void> {
+  return listen<string>("accent-changed", (e) => cb(e.payload));
+}
