@@ -1,6 +1,4 @@
 import type MarkdownIt from "markdown-it";
-// @ts-expect-error markdown-it ships no types for its internal rules
-import referenceRule from "markdown-it/lib/rules_block/reference.mjs";
 import type StateBlock from "markdown-it/lib/rules_block/state_block.mjs";
 import type StateCore from "markdown-it/lib/rules_core/state_core.mjs";
 import type Token from "markdown-it/lib/token.mjs";
@@ -11,10 +9,11 @@ import type Token from "markdown-it/lib/token.mjs";
  *
  * Raw blocks come from three places:
  * 1. `scanRaw` pre-splits the source into blank-line separated chunks and
- *    marks some as raw (front matter, `$$` math, footnotes, reference
- *    definitions, paragraphs using `[^…]`, `][…]` or `$…$`). A block rule
- *    turns each marked chunk into a `raw_block` token when markdown-it reaches it.
- * 2. markdown-it's own `html_block` tokens.
+ *    marks some as raw (front matter, `$$` math, footnotes, paragraphs using
+ *    `[^…]`, `][…]` or `$…$`). A block rule turns each marked chunk into a
+ *    `raw_block` token when markdown-it reaches it.
+ * 2. markdown-it's own `html_block` tokens, and every reference definition
+ *    markdown-it accepts (its `reference` rule is wrapped to emit one).
  * 3. A top-level block written right against a raw block (no blank line
  *    between them) joins it, since the serializer would otherwise insert a
  *    blank line and change the raw part ("x\n</details>").
@@ -33,16 +32,19 @@ interface RawEnv {
   mdnoteRaw?: RawScan;
 }
 
-/** Same normalisation as markdown-it, so line numbers match its own. */
+/**
+ * Same normalisation as markdown-it, so line numbers match its own, plus the
+ * UTF-8 BOM is dropped (notes are saved as plain UTF-8; a BOM would also hide
+ * the front matter).
+ */
 export function normalizeSource(src: string): string {
-  return src.replace(/\r\n?/g, "\n").replace(/\0/g, "�");
+  return src.replace(/^﻿/, "").replace(/\r\n?/g, "\n").replace(/\0/g, "�");
 }
 
 const BLANK = /^[ \t]*$/;
 const QUOTE_PREFIX = /^(?: {0,3}> ?)*/;
 const FENCE = /^[ \t]*(?:(?:[-+*]|\d{1,9}[.)])[ \t]+)*(`{3,}|~{3,})/;
 const MATH_OPEN = /^ {0,3}\$\$/;
-const REF_DEF = /^ {0,3}\[[^\]]+\]:[ \t]*\S/;
 const FOOTNOTE_DEF = /^ {0,3}\[\^[^\]]+\]:/;
 // `[^note]`, `][label]` / `][]`, or `$math$` (not "$5 and $10": no space inside the dollars).
 const RAW_INLINE = /\[\^[^\]\s]+\]|\]\[[^\]]*\]|(?:^|[^\\$\w])\$[^\s$](?:[^$\n]*[^\s$\\])?\$(?![\w$])/;
@@ -106,7 +108,7 @@ export function scanRaw(src: string): RawScan {
         continue;
       }
       if (FOOTNOTE_DEF.test(text)) footnote = true;
-      if (REF_DEF.test(text) || FOOTNOTE_DEF.test(text) || RAW_INLINE.test(text)) raw = true;
+      if (FOOTNOTE_DEF.test(text) || RAW_INLINE.test(text)) raw = true;
     }
     let end = Math.min(i, lines.length);
     while (end > start && blank(end - 1)) end--;
@@ -122,6 +124,44 @@ export function scanRaw(src: string): RawScan {
     i = Math.max(i, end);
   }
   return { ranges, lineStarts, frontMatter };
+}
+
+type BlockRule = (state: StateBlock, startLine: number, endLine: number, silent: boolean) => boolean;
+
+/** markdown-it's own `reference` rule (set by `rawPlugin`). */
+let referenceRule: BlockRule = () => false;
+
+/**
+ * Source of lines `start..end` as written inside the current container: the
+ * first line from where its block starts (after "> " or a list marker, keeping
+ * its own up-to-3-space indent), the others without the container's indent.
+ */
+function blockSource(state: StateBlock, start: number, end: number): string {
+  let pos = state.bMarks[start] + state.tShift[start];
+  for (let extra = state.sCount[start] - state.blkIndent; extra > 0 && state.src[pos - 1] === " "; extra--) pos--;
+  const first = state.src.slice(pos, state.eMarks[start]);
+  return end > start + 1 ? first + "\n" + state.getLines(start + 1, end, state.blkIndent, false) : first;
+}
+
+/** Pushes a raw block, or extends the previous one when it ends right where this one starts. */
+function rawToken(state: StateBlock, start: number, end: number): Token {
+  const prev = state.tokens[state.tokens.length - 1];
+  if (prev?.type === "raw_block" && prev.level === state.level && prev.map?.[1] === start && prev.info !== "front_matter") {
+    prev.content += "\n" + blockSource(state, start, end);
+    prev.map[1] = end;
+    return prev;
+  }
+  const token = state.push("raw_block", "", 0);
+  token.content = blockSource(state, start, end);
+  token.map = [start, end];
+  return token;
+}
+
+/** markdown-it drops reference definitions from its output; keep each one as a raw block. */
+function referenceAsRaw(state: StateBlock, startLine: number, endLine: number, silent: boolean): boolean {
+  if (!referenceRule(state, startLine, endLine, silent)) return false;
+  if (!silent) rawToken(state, startLine, state.line);
+  return true;
 }
 
 /** Lets markdown-it know the reference definitions inside a raw range, so `[text]` links still resolve. */
@@ -148,9 +188,7 @@ function rawBlockRule(state: StateBlock, startLine: number, endLine: number, sil
   for (let line = startLine + 1; line < end; line++)
     if (!state.isEmpty(line) && state.sCount[line] < state.blkIndent) end = line;
   registerReferences(state, startLine, end);
-  const token = state.push("raw_block", "", 0);
-  token.content = state.getLines(startLine, end, state.blkIndent, false);
-  token.map = [startLine, end];
+  const token = rawToken(state, startLine, end);
   token.info = startLine === 0 && scan.frontMatter ? "front_matter" : "";
   state.line = end;
   return true;
@@ -197,6 +235,12 @@ function joinAdjacentRaw(state: StateCore): void {
 }
 
 export function rawPlugin(md: MarkdownIt): void {
+  // `__rules__` is markdown-it internal, but the only way to reach a built-in rule.
+  const rules = (md.block.ruler as unknown as { __rules__: { name: string; fn: BlockRule }[] }).__rules__;
+  const reference = rules.find((r) => r.name === "reference");
+  if (!reference) throw new Error("markdown-it reference rule not found");
+  referenceRule = reference.fn;
+  md.block.ruler.at("reference", referenceAsRaw);
   md.block.ruler.before("table", "mdnote_raw", rawBlockRule);
   md.core.ruler.after("block", "mdnote_raw_join", joinAdjacentRaw);
 }

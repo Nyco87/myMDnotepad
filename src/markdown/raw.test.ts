@@ -40,6 +40,11 @@ describe("raw markdown is kept verbatim (brief)", () => {
     expect(pretty(md)).toBe("---\ntitle: x\n---\n\n# Titre\n\n- a\n");
     expect(parseMarkdown(md).firstChild!.type.name).toBe("raw_block");
   });
+  test("front matter after a UTF-8 BOM (BOM dropped)", () => {
+    const md = "﻿---\ntitle: x\n---\n\ntext\n";
+    expect(pretty(md)).toBe("---\ntitle: x\n---\n\ntext\n");
+    expect(parseMarkdown(md).firstChild!.type.name).toBe("raw_block");
+  });
   for (const [name, raw] of Object.entries(RAW_CASES)) test(name, () => verbatim(raw));
   test("inline HTML becomes raw_inline", () => {
     const md = "a <kbd>Ctrl</kbd> __b__\n";
@@ -64,6 +69,14 @@ describe("reference definitions (ruling R7)", () => {
   test("unused definition is kept", () => expect(pretty("[x]: /unused\n\ntext\n")).toBe("[x]: /unused\n\ntext\n"));
   test("used definition and its paragraph are kept", () =>
     expect(pretty("voir [doc][1]\n\n[1]: https://a.b\n")).toBe("voir [doc][1]\n\n[1]: https://a.b\n"));
+  // Review fix: every definition markdown-it accepts is kept, wherever it is.
+  for (const md of ["- [a]: /u\n- b\n", "> - [a]: /u\n", "[a]:\n/url\n\ntext\n", "   [a]: /u\n\ntext\n", "> [a]: /u\n> [b]: /v\n"])
+    test(`definition kept byte for byte ${JSON.stringify(md)}`, () => expect(pretty(md)).toBe(md));
+  test("multi-line definition that is used is kept", () => {
+    const once = pretty("voir [a]\n\n[a]:\n/url\n");
+    expect(once).toBe("voir [a](/url)\n\n[a]:\n/url\n");
+    expect(pretty(once)).toBe(once);
+  });
   test("definition is a raw_block", () =>
     expect(names(parseMarkdown("[x]: /unused\n"))).toEqual(["raw_block"]));
   test("shortcut reference still resolves through a raw definition", () => {
