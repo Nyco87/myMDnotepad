@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { TextSelection } from "prosemirror-state";
 import type { Node as PMNode } from "prosemirror-model";
 import { makeEditor, pressKey, setCursor } from "./test-helpers";
-import { addRowBeforeCmd, insertTable, setColumnAlign, deleteColumnCmd, deleteRowCmd, addRowAfterCmd } from "./tables";
+import { insertionAt, insertAtBoundary, addRowBeforeCmd, insertTable, setColumnAlign, deleteColumnCmd, deleteRowCmd, addRowAfterCmd } from "./tables";
 
 const MD3 = "| a | b |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n";
 
@@ -135,5 +135,52 @@ describe("tables", () => {
     expect(deleteRowCmd(ed.view.state, ed.view.dispatch)).toBe(true);
     expect(findTable(ed.view.state.doc)!.node.childCount).toBe(2);
     checkHeaderInvariant(ed, ["1", "2", "3", "4"]);
+  });
+});
+
+describe("table boundary insertion", () => {
+  it("insertionAt_maps_boundaries_to_before_after", () => {
+    expect(insertionAt(0, 3)).toEqual({ index: 0, where: "before" });
+    expect(insertionAt(1, 3)).toEqual({ index: 1, where: "before" });
+    expect(insertionAt(2, 3)).toEqual({ index: 2, where: "before" });
+    expect(insertionAt(3, 3)).toEqual({ index: 2, where: "after" });
+  });
+
+  const text = (doc: PMNode, row: number): string[] => {
+    const out: string[] = [];
+    findTable(doc)!.node.child(row).forEach((c) => out.push(c.textContent));
+    return out;
+  };
+
+  it("insert_row_at_boundary_0_keeps_header_invariant", () => {
+    const ed = makeEditor(MD3);
+    const t = findTable(ed.view.state.doc)!;
+    expect(insertAtBoundary(ed.view, t.pos, "row", 0)).toBe(true);
+    const n = findTable(ed.view.state.doc)!.node;
+    expect(n.childCount).toBe(4);
+    n.child(0).forEach((c) => expect(c.type.name).toBe("table_header"));
+    for (let r = 1; r < 4; r++) n.child(r).forEach((c) => expect(c.type.name).toBe("table_cell"));
+    expect(text(ed.view.state.doc, 1)).toEqual(["a", "b"]);
+  });
+
+  it("insert_row_in_middle_and_at_end", () => {
+    const ed = makeEditor(MD3);
+    insertAtBoundary(ed.view, findTable(ed.view.state.doc)!.pos, "row", 2);
+    expect(text(ed.view.state.doc, 1)).toEqual(["1", "2"]);
+    expect(text(ed.view.state.doc, 2)).toEqual(["", ""]);
+    expect(text(ed.view.state.doc, 3)).toEqual(["3", "4"]);
+    insertAtBoundary(ed.view, findTable(ed.view.state.doc)!.pos, "row", 4);
+    expect(findTable(ed.view.state.doc)!.node.childCount).toBe(5);
+    expect(text(ed.view.state.doc, 4)).toEqual(["", ""]);
+  });
+
+  it("insert_column_at_boundaries", () => {
+    const ed = makeEditor(MD3);
+    insertAtBoundary(ed.view, findTable(ed.view.state.doc)!.pos, "col", 0);
+    expect(text(ed.view.state.doc, 1)).toEqual(["", "1", "2"]);
+    insertAtBoundary(ed.view, findTable(ed.view.state.doc)!.pos, "col", 3);
+    expect(text(ed.view.state.doc, 1)).toEqual(["", "1", "2", ""]);
+    insertAtBoundary(ed.view, findTable(ed.view.state.doc)!.pos, "col", 2);
+    expect(text(ed.view.state.doc, 0)).toEqual(["", "a", "", "b", ""]);
   });
 });

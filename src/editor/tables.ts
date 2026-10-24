@@ -160,67 +160,139 @@ export function tableMenuItems(view: EditorView): ContextMenuItem[] {
   ];
 }
 
+export type Axis = "row" | "col";
+
+/** Boundary `boundary` (0..count) → the cell index to put the cursor in and on which side to insert. */
+export function insertionAt(boundary: number, count: number): { index: number; where: "before" | "after" } {
+  return boundary >= count ? { index: count - 1, where: "after" } : { index: boundary, where: "before" };
+}
+
+/** Inserts a row/column at `boundary` (0 = before the first, n = after the last) of the table at `tablePos`. */
+export function insertAtBoundary(view: EditorView, tablePos: number, axis: Axis, boundary: number): boolean {
+  const node = view.state.doc.nodeAt(tablePos);
+  if (!node || node.type.name !== "table") return false;
+  const map = TableMap.get(node);
+  const { index, where } = insertionAt(boundary, axis === "row" ? map.height : map.width);
+  const rel = axis === "row" ? map.map[index * map.width] : map.map[index];
+  const cellPos = tablePos + 1 + rel; // start of the cell
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, cellPos + 2)));
+  const cmd =
+    axis === "row"
+      ? where === "before" ? addRowBeforeCmd : addRowAfterCmd
+      : where === "before" ? addColumnBeforeCmd : addColumnAfterCmd;
+  return cmd(view.state, view.dispatch);
+}
+
+const BTN = 18;
+
 /**
- * While the cursor is in a table, shows "+" buttons at its right (append column) and bottom
- * (append row). The buttons live in an overlay next to the editor DOM, never in the document.
+ * While the pointer is over a table, shows one round "+" on its left edge (insert a row at the nearest row
+ * boundary) or on its top edge (insert a column at the nearest column boundary), whichever is closer to the
+ * pointer. The buttons live in an overlay next to the editor DOM, never in the document.
  */
 export function tableControlsPlugin(): Plugin {
   return new Plugin({
     view(view) {
       const host = view.dom.parentElement;
-      const mkBtn = (cls: "col" | "row", title: string, cmd: Command): HTMLButtonElement => {
-        const b = document.createElement("button");
+      let current: { el: HTMLElement; axis: Axis; boundary: number } | null = null;
+      const show = (b: HTMLElement, on: boolean): void => {
+        b.classList.toggle("on", on);
+      };
+      const rowBtn = document.createElement("button");
+      const colBtn = document.createElement("button");
+      const hide = (): void => {
+        current = null;
+        show(rowBtn, false);
+        show(colBtn, false);
+      };
+      const tablePosOf = (el: HTMLElement): number => {
+        try {
+          const $p = view.state.doc.resolve(view.posAtDOM(el, 0));
+          for (let d = $p.depth; d > 0; d--) if ($p.node(d).type.name === "table") return $p.before(d);
+          const after = $p.nodeAfter;
+          return after && after.type.name === "table" ? $p.pos : -1;
+        } catch {
+          return -1;
+        }
+      };
+      const setup = (b: HTMLButtonElement, axis: Axis, title: string): void => {
         b.type = "button";
-        b.className = `tbl-add ${cls}`;
+        b.className = `tbl-add ${axis}`;
         b.title = title;
         b.textContent = "+";
-        b.hidden = true;
+        b.setAttribute("aria-label", title);
         b.addEventListener("mousedown", (e) => e.preventDefault()); // keep editor focus
         b.addEventListener("click", () => {
-          // Append at the very end: move the cursor into the last column / row first.
-          const t = findTable(view.state.selection.$from);
-          if (!t) return;
-          const map = TableMap.get(t.node);
-          const rel = cls === "col" ? map.map[map.width - 1] : map.map[(map.height - 1) * map.width];
-          view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, t.start + rel + 2)));
-          cmd(view.state, view.dispatch);
+          if (!current || current.axis !== axis || !current.el.isConnected) return;
+          const pos = tablePosOf(current.el);
+          if (pos < 0) return;
+          insertAtBoundary(view, pos, axis, current.boundary);
+          hide();
           view.focus();
         });
-        return b;
       };
-      const colBtn = mkBtn("col", "Ajouter une colonne", addColumnAfterCmd);
-      const rowBtn = mkBtn("row", "Ajouter une ligne", addRowAfterCmd);
+      setup(rowBtn, "row", "Insérer une ligne ici");
+      setup(colBtn, "col", "Insérer une colonne ici");
       if (host) {
         if (getComputedStyle(host).position === "static") host.style.position = "relative";
-        host.append(colBtn, rowBtn);
+        host.append(rowBtn, colBtn);
       }
 
-      const update = (v: EditorView): void => {
-        const t = isInTable(v.state) ? findTable(v.state.selection.$from) : null;
-        const dom = t && host ? (v.nodeDOM(t.pos) as HTMLElement | null) : null;
-        if (!host || !dom || !dom.getBoundingClientRect) {
-          colBtn.hidden = rowBtn.hidden = true;
-          return;
+      const nearest = (xs: number[], v: number): number =>
+        xs.reduce((best, x, i) => (Math.abs(x - v) < Math.abs(xs[best] - v) ? i : best), 0);
+
+      const onMove = (e: MouseEvent): void => {
+        if (!host) return;
+        const target = e.target as HTMLElement | null;
+        if (target === rowBtn || target === colBtn) return; // keep what is shown
+        const hit = target?.closest?.("table") as HTMLTableElement | null;
+        let el = hit && view.dom.contains(hit) ? hit : null;
+        if (!el) {
+          // Pointer in the gutter just left of / above a table still counts as hovering it.
+          for (const t of Array.from(view.dom.querySelectorAll("table"))) {
+            const b = t.getBoundingClientRect();
+            if (e.clientX >= b.left - 28 && e.clientX <= b.right && e.clientY >= b.top - 28 && e.clientY <= b.bottom) el = t;
+          }
         }
+        if (!el || el.rows.length === 0) return hide();
         const h = host.getBoundingClientRect();
-        const r = dom.getBoundingClientRect();
-        colBtn.hidden = rowBtn.hidden = false;
-        colBtn.style.left = `${r.right - h.left + host.scrollLeft + 4}px`;
-        colBtn.style.top = `${r.top - h.top + host.scrollTop}px`;
-        colBtn.style.height = `${r.height}px`;
-        rowBtn.style.left = `${r.left - h.left + host.scrollLeft}px`;
-        rowBtn.style.top = `${r.bottom - h.top + host.scrollTop + 4}px`;
-        rowBtn.style.width = `${r.width}px`;
+        const r = el.getBoundingClientRect();
+        const rows = Array.from(el.rows);
+        const ys = [...rows.map((tr) => tr.getBoundingClientRect().top), rows[rows.length - 1].getBoundingClientRect().bottom];
+        const cells = Array.from(rows[0].cells);
+        const xs = [
+          ...cells.map((c) => c.getBoundingClientRect().left),
+          cells.length ? cells[cells.length - 1].getBoundingClientRect().right : r.right,
+        ];
+        const bi = nearest(ys, e.clientY);
+        const bj = nearest(xs, e.clientX);
+        const dRow = Math.hypot(e.clientX - r.left, e.clientY - ys[bi]);
+        const dCol = Math.hypot(e.clientX - xs[bj], e.clientY - r.top);
+        const ox = host.scrollLeft - h.left;
+        const oy = host.scrollTop - h.top;
+        if (dRow <= dCol) {
+          current = { el, axis: "row", boundary: bi };
+          rowBtn.style.left = `${r.left + ox - BTN / 2}px`;
+          rowBtn.style.top = `${ys[bi] + oy - BTN / 2}px`;
+          show(rowBtn, true);
+          show(colBtn, false);
+        } else {
+          current = { el, axis: "col", boundary: bj };
+          colBtn.style.left = `${xs[bj] + ox - BTN / 2}px`;
+          colBtn.style.top = `${r.top + oy - BTN / 2}px`;
+          show(colBtn, true);
+          show(rowBtn, false);
+        }
       };
-      update(view);
-      const onResize = (): void => update(view);
-      window.addEventListener("resize", onResize);
+      host?.addEventListener("mousemove", onMove);
+      host?.addEventListener("mouseleave", hide);
       return {
-        update,
+        update: hide, // the table may have moved or changed: wait for the next pointer move
         destroy() {
-          window.removeEventListener("resize", onResize);
-          colBtn.remove();
+          host?.removeEventListener("mousemove", onMove);
+          host?.removeEventListener("mouseleave", hide);
           rowBtn.remove();
+          colBtn.remove();
         },
       };
     },

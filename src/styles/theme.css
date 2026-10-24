@@ -154,22 +154,23 @@ body {
 #app { position: relative; }
 .tbl-add {
   position: absolute;
-  min-width: 20px;
-  min-height: 20px;
+  width: 18px;
+  height: 18px;
   padding: 0;
-  border: 1px dashed var(--border);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  background: var(--editor-bg);
   color: var(--accent);
-  font: inherit;
+  font-size: 13px;
   line-height: 1;
   cursor: pointer;
   z-index: 5;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
 }
-.tbl-add:hover { background: var(--accent-tint-22); border-color: var(--accent); }
-.tbl-add[hidden] { display: none; }
-.tbl-add.col { width: 20px; }
-.tbl-add.row { height: 20px; }
+.tbl-add.on { opacity: 1; pointer-events: auto; }
+.tbl-add:hover { background: var(--accent-tint-35); }
 
 .ctx-menu {
   position: fixed;
