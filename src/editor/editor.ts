@@ -48,8 +48,6 @@ function buildNodeViews(_opts: EditorOptions): Record<string, NodeViewConstructo
   return {};
 }
 
-const SET_MARKDOWN_META = "mdnote-set-markdown";
-
 export function createEditor(mount: HTMLElement, opts: EditorOptions): EditorHandle {
   let baseline = "";
   const makeState = (md: string): EditorState => {
@@ -64,7 +62,7 @@ export function createEditor(mount: HTMLElement, opts: EditorOptions): EditorHan
     dispatchTransaction(tr: Transaction) {
       const next = view.state.apply(tr);
       view.updateState(next);
-      if (tr.docChanged && !tr.getMeta(SET_MARKDOWN_META)) opts.onChange(serializeMarkdown(next.doc));
+      if (tr.docChanged) opts.onChange(serializeMarkdown(next.doc));
     },
   });
 
