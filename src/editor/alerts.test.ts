@@ -89,3 +89,19 @@ describe("alert editing", () => {
     expect(ed.view.dom.querySelector(".alert-title")!.textContent).toContain("Danger");
   });
 });
+
+describe("alert paste (parseDOM)", () => {
+  it("unknown_kind_becomes_blockquote_known_kind_stays_alert", async () => {
+    const { DOMParser: PMParser } = await import("prosemirror-model");
+    const { schema } = await import("../markdown/schema");
+    const parse = (html: string) => {
+      const d = document.createElement("div");
+      d.innerHTML = html;
+      return PMParser.fromSchema(schema).parse(d);
+    };
+    expect(parse('<div data-alert="bogus"><p>x</p></div>').firstChild!.type.name).toBe("blockquote");
+    const ok = parse('<div data-alert="TIP"><p>x</p></div>').firstChild!;
+    expect(ok.type.name).toBe("alert");
+    expect(ok.attrs.kind).toBe("tip");
+  });
+});

@@ -38,6 +38,7 @@ export function slashQuery(state: EditorState): { from: number; query: string } 
   const before = parent.textBetween(0, $from.parentOffset, undefined, "\n");
   const m = /(?:^|\s)\/([^\s/]*)$/.exec(before);
   if (!m) return null;
+  if (/^\d+$/.test(m[1])) return null; // « 1 /2 » is a fraction, not a command
   return { from: $from.pos - m[1].length - 1, query: m[1] };
 }
 

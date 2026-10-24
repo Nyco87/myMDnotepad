@@ -213,3 +213,11 @@ describe("slash menu plugin", () => {
     expect(pressKey(ed.view, "a")).toBe(false);
   });
 });
+
+describe("slashQuery digits", () => {
+  it("does_not_open_for_digit_only_queries", () => {
+    expect(slashQuery(stateAtEnd("1 /2\n"))).toBeNull();
+    expect(slashQuery(stateAtEnd("/12\n"))).toBeNull();
+    expect(slashQuery(stateAtEnd("x /t2\n"))?.query).toBe("t2");
+  });
+});

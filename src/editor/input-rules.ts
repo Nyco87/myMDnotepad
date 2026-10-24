@@ -109,7 +109,7 @@ export function buildInputRules(schema: Schema): Plugin {
       markRule(/(?:^|[^*])\*\*([^*\s](?:[^*]*[^*\s])?)\*\*$/, strong, 2),
       markRule(/(?:^|[^*])\*([^*\s](?:[^*]*[^*\s])?)\*$/, em, 1),
       markRule(/(?:^|[^~])~~([^~\s](?:[^~]*[^~\s])?)~~$/, strike, 2),
-      markRule(/(?:^|[^=])==([^=\s](?:[^=]*[^=\s])?)==$/, highlight, 2),
+      markRule(/(?:^|[^=\p{L}\p{N}_])==([^=\s](?:[^=]*[^=\s])?)==$/u, highlight, 2),
       markRule(/(?:^|[^`])`([^`\s](?:[^`]*[^`\s])?)`$/, code, 1),
     ],
   });

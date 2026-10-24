@@ -124,3 +124,12 @@ describe("mark input rules", () => {
     expect(p.child(1).marks[0].type.name).toBe("strong");
   });
 });
+
+describe("highlight rule boundary", () => {
+  it("needs_a_non_word_char_or_line_start_before_opening", () => {
+    expect(typed("a==b==").view.state.doc.firstChild!.textContent).toBe("a==b==");
+    const p = typed("a ==b==").view.state.doc.firstChild!;
+    expect(p.lastChild!.marks[0].type.name).toBe("highlight");
+    expect(typed("(==b==").view.state.doc.firstChild!.lastChild!.marks[0].type.name).toBe("highlight");
+  });
+});

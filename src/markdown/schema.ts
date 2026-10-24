@@ -1,5 +1,6 @@
 import { Schema, type NodeSpec, type MarkSpec } from "prosemirror-model";
 import { tableNodes } from "prosemirror-tables";
+import { alertKindOf } from "./alert-kinds";
 
 /**
  * Document schema shared by the editor, the markdown parser and the serializer.
@@ -31,7 +32,11 @@ export const nodes: Record<string, NodeSpec> = {
     content: "block+",
     group: "block",
     defining: true,
-    parseDOM: [{ tag: "blockquote" }],
+    parseDOM: [
+      { tag: "blockquote" },
+      // Pasted alert of an unknown kind: a plain quote (known kinds are handled by the alert rule).
+      { tag: "div[data-alert]", getAttrs: (dom) => (alertKindOf((dom as HTMLElement).getAttribute("data-alert") ?? "") ? false : null) },
+    ],
     toDOM: () => ["blockquote", 0],
   },
 
@@ -47,7 +52,10 @@ export const nodes: Record<string, NodeSpec> = {
     parseDOM: [
       {
         tag: "div[data-alert]",
-        getAttrs: (dom) => ({ kind: (dom as HTMLElement).getAttribute("data-alert") || "note" }),
+        getAttrs: (dom) => {
+          const kind = alertKindOf((dom as HTMLElement).getAttribute("data-alert") ?? "");
+          return kind ? { kind } : false; // unknown kind: falls back to the blockquote rule below
+        },
       },
     ],
     toDOM: (node) => ["div", { "data-alert": node.attrs.kind, class: `alert alert-${node.attrs.kind}` }, 0],

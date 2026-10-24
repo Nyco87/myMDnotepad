@@ -203,3 +203,30 @@ describe("sticky blocks and wrapped lines", () => {
     expect(marks).toEqual(["em", "strong"]);
   });
 });
+
+describe("insertCodeBlock keeps rich paragraphs", () => {
+  it("rich_paragraph_gets_a_new_empty_code_block_after_it", async () => {
+    const { insertCodeBlock } = await import("./keymap");
+    for (const md of ["a [lien](https://x.y/z) b\n", "un **gras** mot\n", "![alt](img.png)\n"]) {
+      const ed = makeEditor(md);
+      const before = ed.getMarkdown();
+      cursorAtEnd(ed.view);
+      expect(insertCodeBlock()(ed.view.state, ed.view.dispatch)).toBe(true);
+      const doc = ed.view.state.doc;
+      expect(doc.childCount).toBe(2);
+      expect(doc.firstChild!.type.name).toBe("paragraph");
+      expect(doc.child(1).type.name).toBe("code_block");
+      expect(doc.child(1).content.size).toBe(0);
+      expect(ed.view.state.selection.$from.parent.type.name).toBe("code_block");
+      expect(ed.getMarkdown().startsWith(before.trimEnd())).toBe(true);
+    }
+  });
+  it("plain_paragraph_is_still_converted", async () => {
+    const { insertCodeBlock } = await import("./keymap");
+    const ed = makeEditor("texte simple\n");
+    cursorAtEnd(ed.view);
+    insertCodeBlock()(ed.view.state, ed.view.dispatch);
+    expect(ed.view.state.doc.childCount).toBe(1);
+    expect(ed.view.state.doc.firstChild!.type.name).toBe("code_block");
+  });
+});

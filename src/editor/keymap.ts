@@ -34,7 +34,31 @@ export function wrapIn(type: "blockquote" | "bullet_list" | "ordered_list" | "ta
 }
 
 export function insertCodeBlock(): Command {
-  return (state, dispatch) => setBlockType(state.schema.nodes.code_block)(state, dispatch);
+  return (state, dispatch) => {
+    const { code_block } = state.schema.nodes;
+    // A code block holds plain text only: converting a paragraph with marks, links or images would drop them.
+    let rich = false;
+    state.doc.nodesBetween(state.selection.from, state.selection.to, (node) => {
+      if (node.isTextblock && node.type !== code_block) {
+        node.forEach((child) => {
+          if (!child.isText || child.marks.length > 0) rich = true;
+        });
+      }
+      return !node.isTextblock;
+    });
+    if (!rich) return setBlockType(code_block)(state, dispatch);
+    const { $to } = state.selection;
+    if ($to.depth < 1) return false;
+    const at = $to.after();
+    if (!state.doc.resolve(at).parent.canReplaceWith(state.doc.resolve(at).index(), state.doc.resolve(at).index(), code_block)) {
+      return false;
+    }
+    if (dispatch) {
+      const tr = state.tr.insert(at, code_block.create());
+      dispatch(tr.setSelection(TextSelection.create(tr.doc, at + 1)).scrollIntoView());
+    }
+    return true;
+  };
 }
 
 /** Inserts a rule and guarantees an empty paragraph after it, which receives the cursor. */
