@@ -30,6 +30,18 @@ impl Default for Settings {
 pub struct AppState {
     pub settings_path: PathBuf,
     pub settings: Mutex<Settings>,
+    /// Surveillance du dossier racine (remplacée à chaque `set_root`).
+    pub watcher: Mutex<Option<crate::watcher::Watcher>>,
+}
+
+impl AppState {
+    /// (Re)lance la surveillance de `root` ; ne plante jamais si le dossier est absent.
+    pub fn restart_watcher(&self, app: &tauri::AppHandle, root: &Path) {
+        let next = if root.is_dir() { crate::watcher::start(app.clone(), root.to_path_buf()).ok() } else { None };
+        if let Ok(mut w) = self.watcher.lock() {
+            *w = next; // l'ancien watcher est arrêté (drop)
+        }
+    }
 }
 
 impl AppState {
@@ -101,6 +113,8 @@ pub fn set_root(app: tauri::AppHandle, state: State<AppState>, abs: String) -> R
     app.asset_protocol_scope()
         .allow_directory(&abs_dir, true)
         .map_err(|e| format!("Impossible d'autoriser l'accès aux images : {e}"))?;
+    drop(cur);
+    state.restart_watcher(&app, Path::new(&abs_dir));
     Ok(())
 }
 

@@ -4,6 +4,7 @@ mod images;
 mod notes_fs;
 mod paths;
 mod settings;
+mod watcher;
 mod window_fx;
 
 use settings::AppState;
@@ -46,10 +47,16 @@ pub fn run() {
             if let Some(r) = loaded.root_dir.as_deref().filter(|r| std::path::Path::new(r).is_dir()) {
                 let _ = app.asset_protocol_scope().allow_directory(r, true);
             }
+            let root_for_watch = loaded.root_dir.clone();
             app.manage(AppState {
                 settings_path,
                 settings: Mutex::new(loaded),
+                watcher: Mutex::new(None),
             });
+            if let Some(r) = root_for_watch {
+                let handle = app.handle().clone();
+                app.state::<AppState>().restart_watcher(&handle, std::path::Path::new(&r));
+            }
 
             let window = app
                 .get_webview_window("main")

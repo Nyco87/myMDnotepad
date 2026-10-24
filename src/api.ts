@@ -1,4 +1,5 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 export type WindowEffect = "acrylic" | "mica";
 export type Settings = {
@@ -79,4 +80,9 @@ export function saveImage(noteRel: string, bytes: Uint8Array, ext: string): Prom
 /** Copie une image du disque à côté de la note ; renvoie le lien relatif ("images/…"). */
 export function importImage(noteRel: string, srcAbs: string): Promise<string> {
   return invoke<string>("import_image", { noteRel, srcAbs });
+}
+
+/** Abonnement aux changements du dossier de notes (chemins relatifs). Renvoie la fonction de désabonnement. */
+export function onFsChanged(cb: (paths: string[]) => void): Promise<() => void> {
+  return listen<{ paths: string[] }>("fs-changed", (e) => cb(e.payload.paths));
 }
