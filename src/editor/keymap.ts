@@ -130,8 +130,7 @@ let warnedLayout = false;
  * ArrowDown on the last line of a blockquote / code block leaves it.
  *
  * Two checks, both required:
- *  1. structural: code_block has no "
-" after the cursor; blockquote: the
+ *  1. structural: code_block has no "\n" after the cursor; blockquote: the
  *     cursor's textblock is the last block at every level inside the quote and
  *     has no hard_break after the cursor;
  *  2. visual: `view.endOfTextblock("down")`, so soft-wrapped text only leaves from

@@ -12,6 +12,8 @@ import { schema } from "../markdown/schema";
 import { buildInputRules } from "./input-rules";
 import { buildKeymap } from "./keymap";
 import { tableControlsPlugin } from "./tables";
+import { imageNodeView, imagePastePlugin } from "./images";
+import { taskItemView } from "./task-item";
 import { parseMarkdown } from "../markdown/parse";
 import { serializeMarkdown } from "../markdown/serialize";
 
@@ -35,7 +37,7 @@ export interface EditorOptions {
  * Plugin list. Later tasks extend this one place: input rules + keymap (task 8),
  * table controls (task 9), toolbar/image paste (task 10).
  */
-function buildPlugins(schema: Schema): Plugin[] {
+function buildPlugins(schema: Schema, opts: EditorOptions): Plugin[] {
   return [
     history(),
     buildInputRules(schema),
@@ -47,12 +49,13 @@ function buildPlugins(schema: Schema): Plugin[] {
     columnResizing(),
     tableEditing(),
     tableControlsPlugin(),
+    imagePastePlugin(() => opts.noteRel),
   ];
 }
 
-/** Node views registered in one place (image nodeview comes in task 10). */
-function buildNodeViews(_opts: EditorOptions): Record<string, NodeViewConstructor> {
-  return {};
+/** Node views registered in one place. */
+function buildNodeViews(opts: EditorOptions): Record<string, NodeViewConstructor> {
+  return { image: imageNodeView(() => opts.noteRel), task_item: taskItemView };
 }
 
 export function createEditor(mount: HTMLElement, opts: EditorOptions): EditorHandle {
@@ -60,7 +63,7 @@ export function createEditor(mount: HTMLElement, opts: EditorOptions): EditorHan
   const makeState = (md: string): EditorState => {
     const doc: PMNode = parseMarkdown(md);
     baseline = serializeMarkdown(doc);
-    return EditorState.create({ schema, doc, plugins: buildPlugins(schema) });
+    return EditorState.create({ schema, doc, plugins: buildPlugins(schema, opts) });
   };
 
   const view = new EditorView(mount, {
