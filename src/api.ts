@@ -71,3 +71,12 @@ export function moveEntry(rel: string, destDirRel: string): Promise<string> {
 export function trashEntry(rel: string): Promise<void> {
   return invoke<void>("trash_entry", { rel });
 }
+
+/** Enregistre une image (collée) à côté de la note ; renvoie le lien relatif ("images/…"). */
+export function saveImage(noteRel: string, bytes: Uint8Array, ext: string): Promise<string> {
+  return invoke<string>("save_image", { noteRel, bytes: Array.from(bytes), ext });
+}
+/** Copie une image du disque à côté de la note ; renvoie le lien relatif ("images/…"). */
+export function importImage(noteRel: string, srcAbs: string): Promise<string> {
+  return invoke<string>("import_image", { noteRel, srcAbs });
+}

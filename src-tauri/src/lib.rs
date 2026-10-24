@@ -1,5 +1,6 @@
 mod commands;
 mod file_ops;
+mod images;
 mod notes_fs;
 mod paths;
 mod settings;
@@ -26,7 +27,9 @@ pub fn run() {
             commands::create_folder,
             commands::rename_entry,
             commands::move_entry,
-            commands::trash_entry
+            commands::trash_entry,
+            commands::save_image,
+            commands::import_image
         ])
         .setup(|app| {
             let exe_dir = std::env::current_exe()
@@ -39,6 +42,9 @@ pub fn run() {
             let settings_path = settings::settings_path(&exe_dir, &appdata);
             let loaded = settings::load(&settings_path);
             let effect = loaded.window_effect.clone();
+            if let Some(r) = loaded.root_dir.as_deref().filter(|r| std::path::Path::new(r).is_dir()) {
+                let _ = app.asset_protocol_scope().allow_directory(r, true);
+            }
             app.manage(AppState {
                 settings_path,
                 settings: Mutex::new(loaded),

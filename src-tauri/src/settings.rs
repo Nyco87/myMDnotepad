@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{Manager, State};
 
 const FILE_NAME: &str = "mdnote.settings.json";
 
@@ -87,15 +87,20 @@ pub fn save_settings(state: State<AppState>, settings: Settings) -> Result<(), S
 }
 
 #[tauri::command]
-pub fn set_root(state: State<AppState>, abs: String) -> Result<(), String> {
+pub fn set_root(app: tauri::AppHandle, state: State<AppState>, abs: String) -> Result<(), String> {
     if !Path::new(&abs).is_dir() {
         return Err(format!("Ce dossier n'existe pas : {abs}"));
     }
     let mut cur = state.settings.lock().map_err(|_| "Réglages indisponibles")?;
     let mut next = cur.clone();
+    let abs_dir = abs.clone();
     next.root_dir = Some(abs);
     save(&state.settings_path, &next)?;
     *cur = next;
+    // Autorise le protocole asset (aperçu des images) sur le nouveau dossier.
+    app.asset_protocol_scope()
+        .allow_directory(&abs_dir, true)
+        .map_err(|e| format!("Impossible d'autoriser l'accès aux images : {e}"))?;
     Ok(())
 }
 

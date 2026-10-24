@@ -1,7 +1,7 @@
 //! Commandes Tauri exposées au front pour l'arborescence et les opérations sur les fichiers.
 use crate::notes_fs::{NoteFile, TreeNode};
 use crate::settings::AppState;
-use crate::{file_ops, notes_fs};
+use crate::{file_ops, images, notes_fs};
 use tauri::State;
 
 #[tauri::command]
@@ -42,4 +42,14 @@ pub fn move_entry(state: State<AppState>, rel: String, dest_dir_rel: String) -> 
 #[tauri::command]
 pub fn trash_entry(state: State<AppState>, rel: String) -> Result<(), String> {
     file_ops::trash_entry(&state.root()?, &rel)
+}
+
+#[tauri::command]
+pub fn save_image(state: State<AppState>, note_rel: String, bytes: Vec<u8>, ext: String) -> Result<String, String> {
+    images::save_image(&state.root()?, &note_rel, &bytes, &ext)
+}
+
+#[tauri::command]
+pub fn import_image(state: State<AppState>, note_rel: String, src_abs: String) -> Result<String, String> {
+    images::import_image(&state.root()?, &note_rel, &src_abs)
 }
