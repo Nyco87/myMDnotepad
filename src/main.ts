@@ -116,19 +116,30 @@ async function main(): Promise<void> {
 
   // ---- Fermeture : tout enregistrer d'abord ----
   let forceCloseUntil = 0;
+  let closing = false;
+  const destroy = (): Promise<void> => win.destroy().catch((e) => toast(`Fermeture impossible : ${errText(e)}`));
   void win
     .onCloseRequested(async (event) => {
-      if (Date.now() < forceCloseUntil) return; // seconde demande : on ferme quand même (destroy par l'API)
       event.preventDefault();
-      try {
-        await tabs?.flushAll();
-      } catch (e) {
-        forceCloseUntil = Date.now() + FORCE_CLOSE_MS;
-        toast(`Certaines notes n'ont pas pu être enregistrées (${errText(e)}). Fermez à nouveau pour quitter quand même.`);
+      if (Date.now() < forceCloseUntil) {
+        await destroy(); // seconde demande après un échec : on ferme quand même
         return;
       }
-      await persist(); // sans effet tant que la restauration n'est pas finie : la session d'origine reste en place
-      await win.destroy();
+      if (closing) return; // une fermeture est déjà en cours
+      closing = true;
+      try {
+        try {
+          await tabs?.flushAll();
+        } catch (e) {
+          forceCloseUntil = Date.now() + FORCE_CLOSE_MS;
+          toast(`Certaines notes n'ont pas pu être enregistrées (${errText(e)}). Fermez à nouveau pour quitter quand même.`);
+          return;
+        }
+        await persist(); // sans effet tant que la restauration n'est pas finie : la session d'origine reste en place
+        await destroy();
+      } finally {
+        closing = false;
+      }
     })
     .catch((e) => console.error(e));
 
@@ -137,6 +148,8 @@ async function main(): Promise<void> {
     "keydown",
     (e) => {
       if (!e.ctrlKey || e.altKey || e.metaKey) return;
+      // Le champ de renommage de l'arborescence garde ses touches.
+      if (e.target instanceof HTMLElement && e.target.classList.contains("sb-rename")) return;
       const key = e.key.toLowerCase();
       if (key === "n" && !e.shiftKey) {
         e.preventDefault();
@@ -157,62 +170,71 @@ async function main(): Promise<void> {
     true,
   );
 
-  // ---- Réglages et dossier racine ----
-  let settings: Settings | null = null;
-  let status: RootStatus = "unset";
   try {
-    settings = await getSettings();
-    status = settings.root_dir ? await rootStatus() : "unset";
+    // ---- Réglages et dossier racine ----
+    let settings: Settings | null = null;
+    let status: RootStatus = "unset";
+    try {
+      settings = await getSettings();
+      status = settings.root_dir ? await rootStatus() : "unset";
+    } catch (e) {
+      toast(`Réglages illisibles : ${errText(e)}`);
+    }
+    if (!settings || status !== "ok") {
+      // Écran de premier lancement : tâche 13.
+      app.classList.add("no-root");
+      ui.emptyState.textContent = "Aucun dossier de notes";
+      titlebar.render([]);
+      return;
+    }
+    ui.emptyState.textContent = "Aucune note ouverte — Ctrl+N pour en créer une";
+
+    tabs = createTabs({
+      host: ui.editorHost,
+      io: { readNote, writeNote, createNote },
+      makeEditor: (mount, opts) => {
+        opts.onError = toast;
+        return createEditor(mount, opts);
+      },
+      notify: toast,
+      onChange: onTabsChange,
+    });
+    toolbar = mountToolbar(
+      ui.toolbar,
+      () => tabs?.activeEditor()?.view ?? null,
+      () => tabs?.active() ?? "",
+      toast,
+    );
+    sidebar = mountSidebar(ui.sidebar, {
+      beforeMutate: (rel) => (tabs ? tabs.lockUnder(rel) : Promise.resolve()),
+      onOpen: (rel) =>
+        void tabs?.open(rel).then((ok) => {
+          if (ok) focusEditor();
+        }),
+      onRenamed: (oldRel, newRel) => tabs?.renamed(oldRel, newRel),
+      onDeleted: (rel) => tabs?.deleted(rel),
+      onError: toast,
+    });
+    onTabsChange();
+
+    void onFsChanged((paths) => void tabs?.externalChange(paths)).catch((e) => toast(`Surveillance du dossier impossible : ${errText(e)}`));
+
+    // Démarrage rapide : l'onglet actif d'abord, puis l'arborescence et les autres onglets sans bloquer.
+    const restore = tabs.restore(settings.open_tabs ?? [], settings.active_tab);
+    await restore.active;
+    focusEditor();
+    void sidebar.refresh();
+    void restore.all.finally(() => {
+      restoring = false;
+      void persist();
+    });
   } catch (e) {
-    toast(`Réglages illisibles : ${errText(e)}`);
-  }
-  if (!settings || status !== "ok") {
-    // Écran de premier lancement : tâche 13.
+    // La barre de titre (boutons de fenêtre) reste utilisable ; l'erreur s'affiche à la place de l'éditeur.
+    console.error(e);
     app.classList.add("no-root");
-    ui.emptyState.textContent = "Aucun dossier de notes";
-    titlebar.render([]);
-    return;
+    ui.emptyState.hidden = false;
+    ui.emptyState.textContent = `Erreur au démarrage : ${errText(e)}`;
   }
-  ui.emptyState.textContent = "Aucune note ouverte — Ctrl+N pour en créer une";
-
-  tabs = createTabs({
-    host: ui.editorHost,
-    io: { readNote, writeNote, createNote },
-    makeEditor: (mount, opts) => {
-      opts.onError = toast;
-      return createEditor(mount, opts);
-    },
-    notify: toast,
-    onChange: onTabsChange,
-  });
-  toolbar = mountToolbar(
-    ui.toolbar,
-    () => tabs?.activeEditor()?.view ?? null,
-    () => tabs?.active() ?? "",
-    toast,
-  );
-  sidebar = mountSidebar(ui.sidebar, {
-    onOpen: (rel) =>
-      void tabs?.open(rel).then((ok) => {
-        if (ok) focusEditor();
-      }),
-    onRenamed: (oldRel, newRel) => tabs?.renamed(oldRel, newRel),
-    onDeleted: (rel) => tabs?.deleted(rel),
-    onError: toast,
-  });
-  onTabsChange();
-
-  void onFsChanged((paths) => void tabs?.externalChange(paths)).catch((e) => toast(`Surveillance du dossier impossible : ${errText(e)}`));
-
-  // Démarrage rapide : l'onglet actif d'abord, puis l'arborescence et les autres onglets sans bloquer.
-  const restore = tabs.restore(settings.open_tabs ?? [], settings.active_tab);
-  await restore.active;
-  focusEditor();
-  void sidebar.refresh();
-  void restore.all.finally(() => {
-    restoring = false;
-    void persist();
-  });
 }
 
 void main().catch((e) => {

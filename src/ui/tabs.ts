@@ -49,6 +49,12 @@ export interface TabsController {
   isMissing(rel: string): boolean;
   /** À appeler sur `fs-changed` : recharge, ignore l'écho de nos écritures ou crée une copie de conflit. */
   externalChange(paths: string[]): Promise<void>;
+  /**
+   * Avant de renommer, déplacer ou supprimer `prefix` (note ou dossier) : attend la fin des écritures en cours des
+   * onglets concernés et suspend les suivantes jusqu'à l'appel de la fonction renvoyée. Appeler `renamed`/`deleted`
+   * AVANT de libérer : les écritures en attente iront au nouveau chemin (ou n'auront pas lieu si l'onglet est fermé).
+   */
+  lockUnder(prefix: string): Promise<() => void>;
   /** Rouvre la session : l'onglet actif d'abord (`active`), puis les autres dans l'ordre (`all`). */
   restore(rels: string[], active: string | null): { active: Promise<void>; all: Promise<void> };
 }
@@ -68,6 +74,14 @@ interface Tab {
   closed: boolean;
   /** Vérifications de changement externe sérialisées par onglet. */
   check: Promise<void>;
+  /** Versions externes à copier en « (conflit …) » avant toute écriture de la version locale. */
+  conflicts: { content: string; copy: string | null }[];
+  /** Verrous posés par `lockUnder` : aucune écriture tant qu'il en reste. */
+  locks: Set<Promise<void>>;
+  /** Écriture disque en cours. */
+  inflight: Promise<unknown> | null;
+  /** Copie des conflits en cours (une seule à la fois). */
+  resolving: Promise<void> | null;
 }
 
 const pad = (n: number): string => String(n).padStart(2, "0");
@@ -119,13 +133,32 @@ export function createTabs(o: TabsOptions): TabsController {
     mount.className = "editor-pane";
     mount.hidden = true;
     o.host.appendChild(mount);
-    const tab = { rel, mount, lastKnownMtime: file.mtime_ms, diskKnown: file.content, writing: null, missing: false, closed: false, check: Promise.resolve() } as Partial<Tab> as Tab;
+    const tab = {
+      rel,
+      mount,
+      lastKnownMtime: file.mtime_ms,
+      diskKnown: file.content,
+      writing: null,
+      missing: false,
+      closed: false,
+      check: Promise.resolve(),
+      conflicts: [],
+      locks: new Set(),
+      inflight: null,
+      resolving: null,
+    } as Partial<Tab> as Tab;
     tab.saver = createAutosaver(
       async (md) => {
+        await waitUnlocked(tab);
+        // Une version externe en attente de copie bloque l'écriture (le contenu reste en file, pending() reste vrai).
+        if (!tab.closed && tab.conflicts.length > 0) await resolveConflicts(tab);
+        await waitUnlocked(tab);
         if (tab.closed) return tab.lastKnownMtime; // onglet supprimé : ne jamais recréer le fichier
         tab.writing = md;
         try {
-          const mtime = await o.io.writeNote(tab.rel, md);
+          const p = o.io.writeNote(tab.rel, md);
+          tab.inflight = p;
+          const mtime = await p;
           tab.lastKnownMtime = mtime;
           tab.diskKnown = md;
           if (tab.missing) {
@@ -135,6 +168,7 @@ export function createTabs(o: TabsOptions): TabsController {
           return mtime;
         } finally {
           tab.writing = null;
+          tab.inflight = null;
         }
       },
       o.autosaveDelayMs ?? 400,
@@ -146,6 +180,47 @@ export function createTabs(o: TabsOptions): TabsController {
     if (activeRel === null) show(rel);
     else changed();
     return true;
+  };
+
+  const waitUnlocked = async (tab: Tab): Promise<void> => {
+    while (tab.locks.size > 0) await Promise.all([...tab.locks]);
+  };
+
+  /** Écrit chaque version externe en attente dans sa copie « (conflit …) ». Lève une erreur si une copie échoue. */
+  const resolveConflicts = (tab: Tab): Promise<void> => {
+    if (!tab.resolving) {
+      const p: Promise<void> = copyConflicts(tab).finally(() => {
+        if (tab.resolving === p) tab.resolving = null;
+      });
+      tab.resolving = p;
+    }
+    return tab.resolving;
+  };
+
+  /**
+   * Hors de l'autosaver (rien en file) : copie les versions externes puis réécrit la version locale,
+   * car le fichier contient peut-être encore la version externe.
+   */
+  const settleConflicts = async (tab: Tab): Promise<void> => {
+    if (tab.closed || tab.conflicts.length === 0) return;
+    await resolveConflicts(tab);
+    if (tab.closed) return;
+    tab.saver.markSaved(null);
+    tab.saver.schedule(tab.editor.getMarkdown());
+    await tab.saver.flush();
+  };
+
+  const copyConflicts = async (tab: Tab): Promise<void> => {
+    while (tab.conflicts.length > 0) {
+      const c = tab.conflicts[0];
+      if (c.copy === null) {
+        const { dir, base } = conflictName(tab.rel, now());
+        c.copy = await o.io.createNote(dir, base);
+      }
+      await o.io.writeNote(c.copy, c.content);
+      tab.conflicts.shift();
+      notify(`Note modifiée hors de MDnote : l'autre version est enregistrée dans « ${noteTitle(c.copy)} ».`);
+    }
   };
 
   const remove = (tab: Tab): void => {
@@ -186,27 +261,30 @@ export function createTabs(o: TabsOptions): TabsController {
       return;
     }
     tab.lastKnownMtime = file.mtime_ms;
-    if (!tab.saver.pending()) {
+    if (!tab.saver.pending() && tab.conflicts.length === 0) {
       tab.diskKnown = file.content;
       tab.editor.setMarkdown(file.content);
+      // Nouvelle référence : revenir ensuite au contenu enregistré avant doit bien être écrit.
+      tab.saver.markSaved(file.content);
       changed();
       return;
     }
     // Modifications locales non enregistrées ET version externe différente : on garde les deux.
-    const { dir, base } = conflictName(rel, now());
-    try {
-      const copy = await o.io.createNote(dir, base);
-      await o.io.writeNote(copy, file.content);
-      notify(`Note modifiée hors de MDnote : l'autre version est enregistrée dans « ${noteTitle(copy)} ».`);
-    } catch (e) {
-      notify(`Conflit sur « ${noteTitle(rel)} » : copie de l'autre version impossible (${errText(e)}).`);
-      return;
-    }
+    // La version externe est copiée avant toute écriture locale (voir l'autosaver) ; tant que la copie
+    // échoue, la version locale reste en attente et le fichier n'est pas écrasé.
+    tab.conflicts.push({ content: file.content, copy: null });
     tab.diskKnown = file.content;
     try {
+      // Attend l'écriture en cours ; une écriture en file copie d'abord le conflit puis écrit la version locale.
       await tab.saver.flush();
+      // Rien n'était en file (le conflit venait d'une écriture en cours) : copie puis réécriture locale.
+      await settleConflicts(tab);
     } catch (e) {
-      notify(`Enregistrement de « ${noteTitle(tab.rel)} » impossible : ${errText(e)}`);
+      notify(
+        tab.conflicts.length > 0
+          ? `Conflit sur « ${noteTitle(tab.rel)} » : copie de l'autre version impossible (${errText(e)}). La note ne sera pas enregistrée tant que la copie n'aura pas réussi.`
+          : `Enregistrement de « ${noteTitle(tab.rel)} » impossible : ${errText(e)}`,
+      );
     }
   };
 
@@ -229,9 +307,17 @@ export function createTabs(o: TabsOptions): TabsController {
       const tab = find(rel);
       if (!tab) return true;
       try {
-        await tab.saver.flush();
+        // Des frappes pendant l'enregistrement peuvent remettre du contenu en file : on recommence (borné).
+        for (let i = 0; i < 5 && (tab.saver.pending() || tab.conflicts.length > 0); i++) {
+          await tab.saver.flush();
+          await settleConflicts(tab);
+        }
       } catch (e) {
         notify(`« ${noteTitle(tab.rel)} » n'a pas pu être enregistrée, l'onglet reste ouvert : ${errText(e)}`);
+        return false;
+      }
+      if (tab.saver.pending() || tab.conflicts.length > 0) {
+        notify(`« ${noteTitle(tab.rel)} » est encore en cours d'enregistrement, l'onglet reste ouvert.`);
         return false;
       }
       remove(tab);
@@ -267,7 +353,12 @@ export function createTabs(o: TabsOptions): TabsController {
     },
 
     async flushAll() {
-      const results = await Promise.allSettled(tabs.map((t) => t.saver.flush()));
+      const results = await Promise.allSettled(
+        tabs.map(async (t) => {
+          await t.saver.flush();
+          await settleConflicts(t);
+        }),
+      );
       const failed = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
       if (failed) throw failed.reason;
     },
@@ -285,6 +376,18 @@ export function createTabs(o: TabsOptions): TabsController {
           return t.check;
         }),
       );
+    },
+
+    async lockUnder(prefix) {
+      let unlock!: () => void;
+      const lock = new Promise<void>((r) => (unlock = r));
+      const held = tabs.filter((t) => under(t.rel, prefix));
+      for (const t of held) t.locks.add(lock);
+      await Promise.all(held.map((t) => t.inflight?.catch(() => {})));
+      return () => {
+        for (const t of held) t.locks.delete(lock);
+        unlock();
+      };
     },
 
     restore(rels, active) {

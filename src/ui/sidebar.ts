@@ -17,6 +17,12 @@ export interface SidebarHandlers {
    * le contrôleur d'onglets doit fermer tout onglet dont le chemin commence par `rel + "/"`.
    */
   onDeleted(rel: string): void;
+  /**
+   * Appelé AVANT de renommer, déplacer ou supprimer `rel` (note ou dossier) : le contrôleur d'onglets attend ses
+   * écritures en cours et suspend les suivantes. La fonction renvoyée est appelée après `onRenamed`/`onDeleted`
+   * (ou après un échec), ce qui envoie les écritures en attente au nouveau chemin.
+   */
+  beforeMutate?(rel: string): Promise<(() => void) | void>;
   /** Affiche une erreur (toast de l'app). Sans ce gestionnaire, un bandeau d'erreur s'affiche dans la barre latérale. */
   onError?(message: string): void;
 }
@@ -265,6 +271,23 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
 
   // ---- Actions ----
 
+  /** Verrouille les onglets touchés, applique `op`, prévient le contrôleur (`after`) puis libère. */
+  const mutate = async <T>(rel: string, op: () => Promise<T>, after: (result: T) => void): Promise<T> => {
+    let release: (() => void) | void = undefined;
+    try {
+      release = await handlers.beforeMutate?.(rel);
+    } catch {
+      // Verrou impossible : on continue, comme sans contrôleur d'onglets.
+    }
+    try {
+      const result = await op();
+      after(result);
+      return result;
+    } finally {
+      release?.();
+    }
+  };
+
   const doRefresh = async (): Promise<void> => {
     try {
       tree = await api.listTree();
@@ -346,7 +369,11 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
     let newPath: string;
     ed.committing = true;
     try {
-      newPath = await api.renameEntry(ed.path, name);
+      newPath = await mutate(
+        ed.path,
+        () => api.renameEntry(ed.path, name),
+        (np) => handlers.onRenamed(ed.path, np),
+      );
     } catch (e) {
       ed.committing = false;
       if (editing === ed) {
@@ -368,7 +395,6 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
     if (expanded.delete(ed.path)) expanded.add(newPath);
     await refresh();
     render();
-    handlers.onRenamed(ed.path, newPath);
     if (ed.isNew && ed.kind === "note") handlers.onOpen(newPath);
   };
 
@@ -396,7 +422,11 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
     const ok = await confirmDialog(`Envoyer "${name}" à la Corbeille ?`);
     if (!ok) return;
     try {
-      await api.trashEntry(rel);
+      await mutate(
+        rel,
+        () => api.trashEntry(rel),
+        () => handlers.onDeleted(rel),
+      );
     } catch (e) {
       showError(errText(e));
       await refresh();
@@ -408,7 +438,6 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
     }
     expanded.delete(rel);
     await refresh();
-    handlers.onDeleted(rel);
   };
 
   const canMove = (src: string, destDir: string): boolean => {
@@ -424,12 +453,15 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
     dragPath = null;
     if (!canMove(src, destDir)) return;
     try {
-      const newPath = await api.moveEntry(src, destDir);
+      const newPath = await mutate(
+        src,
+        () => api.moveEntry(src, destDir),
+        (np) => handlers.onRenamed(src, np),
+      );
       if (destDir) expanded.add(destDir);
       if (selected === src) selected = newPath;
       if (expanded.delete(src)) expanded.add(newPath);
       await refresh();
-      handlers.onRenamed(src, newPath);
     } catch (err) {
       showError(errText(err));
       await refresh();

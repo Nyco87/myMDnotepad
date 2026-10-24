@@ -5,6 +5,12 @@ export interface Autosaver {
   /** True while content is queued and unsaved, a write is in flight, or the last write failed. */
   pending(): boolean;
   lastSaved(): string | null;
+  /**
+   * Declares `md` as the content now on disk (e.g. after reloading an external change), so a later
+   * schedule() of the previous saved content is written instead of being skipped. `null` forgets the
+   * baseline: the next schedule() always writes.
+   */
+  markSaved(md: string | null): void;
 }
 
 /**
@@ -76,5 +82,8 @@ export function createAutosaver(
     },
     pending: () => writing || (queued !== null && queued !== saved),
     lastSaved: () => saved,
+    markSaved(md) {
+      saved = md;
+    },
   };
 }

@@ -113,4 +113,18 @@ describe("autosaver", () => {
     expect(write.mock.calls.map((c) => (c as unknown[])[0])).toEqual(["a", "b", "a"]);
     expect(a.lastSaved()).toBe("a");
   });
+  it("markSaved_resets_the_baseline", async () => {
+    const write = vi.fn().mockResolvedValue(1);
+    const a = createAutosaver(write);
+    a.schedule("A1");
+    await a.flush();
+    a.markSaved("A1\nB"); // rechargement externe
+    a.schedule("A1"); // retour au contenu enregistré avant : doit être écrit
+    await a.flush();
+    expect(write).toHaveBeenCalledTimes(2);
+    a.markSaved(null);
+    a.schedule("A1");
+    await a.flush();
+    expect(write).toHaveBeenCalledTimes(3);
+  });
 });

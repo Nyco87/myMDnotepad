@@ -281,6 +281,8 @@ describe("sidebar", () => {
     input.value = "Une fois";
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flush();
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     release("Une fois.md");
     await flush();
     expect(api.renameEntry).toHaveBeenCalledTimes(1);
@@ -314,5 +316,52 @@ describe("sidebar", () => {
     await sb.newNote();
     expect(onError).toHaveBeenCalledWith("Disque plein");
     expect((el.querySelector(".sb-banner") as HTMLElement).hidden).toBe(true);
+  });
+  it("rename_locks_tabs_first_and_notifies_before_refresh", async () => {
+    const { el, sb, handlers } = await setup();
+    await sb.newNote();
+    await flush();
+    const release = vi.fn();
+    const beforeMutate = vi.fn(async (_rel: string) => release);
+    (handlers as any).beforeMutate = beforeMutate;
+    const before = vi.mocked(api.listTree).mock.calls.length;
+    const input = el.querySelector("input.sb-rename") as HTMLInputElement;
+    input.value = "Verrou";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flush();
+    expect(beforeMutate).toHaveBeenCalledWith("Nouvelle note.md");
+    const order = (m: any, i = 0) => m.mock.invocationCallOrder[i];
+    expect(order(beforeMutate)).toBeLessThan(order(api.renameEntry));
+    expect(order(handlers.onRenamed)).toBeLessThan(order(api.listTree, before));
+    expect(order(release)).toBeLessThan(order(api.listTree, before));
+  });
+
+  it("trash_locks_tabs_first_and_notifies_before_refresh", async () => {
+    const { row, handlers } = await setup();
+    const release = vi.fn();
+    const beforeMutate = vi.fn(async (_rel: string) => release);
+    (handlers as any).beforeMutate = beforeMutate;
+    const before = vi.mocked(api.listTree).mock.calls.length;
+    row("Courses.md").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    vi.mocked(showContextMenu).mock.calls[0][2][3].action();
+    await flush();
+    (document.querySelector(".confirm-ok") as HTMLButtonElement).click();
+    await flush();
+    const order = (m: any, i = 0) => m.mock.invocationCallOrder[i];
+    expect(order(beforeMutate)).toBeLessThan(order(api.trashEntry));
+    expect(order(handlers.onDeleted)).toBeLessThan(order(api.listTree, before));
+    expect(release).toHaveBeenCalled();
+  });
+
+  it("failed_move_releases_the_lock", async () => {
+    vi.mocked(api.moveEntry).mockRejectedValueOnce("Impossible");
+    const { row, handlers } = await setup();
+    const release = vi.fn();
+    (handlers as any).beforeMutate = vi.fn(async () => release);
+    row("Courses.md").dispatchEvent(dnd("dragstart", "Courses.md"));
+    row("Projets").dispatchEvent(dnd("drop", "Courses.md"));
+    await flush();
+    expect(release).toHaveBeenCalled();
+    expect(handlers.onRenamed).not.toHaveBeenCalled();
   });
 });

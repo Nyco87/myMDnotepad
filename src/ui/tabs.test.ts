@@ -259,6 +259,114 @@ describe("tabs controller", () => {
     expect(disk.get("b.md")!.content).toBe("B2");
   });
 
+  it("reload_then_edit_back_to_previous_saved_content_is_written", async () => {
+    const tabs = setup();
+    await tabs.open("a.md");
+    const ed = editors.get("a.md")!;
+    ed.type("A1");
+    await tabs.flushAll();
+    put("a.md", "A1\nB"); // VS Code ajoute une ligne
+    await tabs.externalChange(["a.md"]);
+    expect(ed.setMarkdown).toHaveBeenCalledWith("A1\nB");
+    ed.type("A1"); // suppression de la ligne ajoutée
+    await tabs.flushAll();
+    expect(disk.get("a.md")!.content).toBe("A1");
+  });
+
+  it("conflict_copy_failure_never_overwrites_external_version", async () => {
+    let failCreate = true;
+    const create = io.createNote.getMockImplementation()!;
+    io.createNote.mockImplementation(async (dir, base) => {
+      if (failCreate) throw "Disque plein";
+      return create(dir, base);
+    });
+    const tabs = setup();
+    await tabs.open("Projets/MDnote.md");
+    editors.get("Projets/MDnote.md")!.type("version locale");
+    put("Projets/MDnote.md", "version externe");
+    await tabs.externalChange(["Projets/MDnote.md"]);
+    expect(disk.get("Projets/MDnote.md")!.content).toBe("version externe");
+    expect(messages.some((m) => m.includes("Disque plein"))).toBe(true);
+    await expect(tabs.flushAll()).rejects.toBeDefined();
+    expect(await tabs.close("Projets/MDnote.md")).toBe(false);
+    expect(disk.get("Projets/MDnote.md")!.content).toBe("version externe");
+    expect(io.writeNote).not.toHaveBeenCalled();
+
+    failCreate = false;
+    await tabs.flushAll();
+    expect(io.writeNote.mock.calls).toEqual([
+      ["Projets/MDnote (conflit 2026-10-24 1830).md", "version externe"],
+      ["Projets/MDnote.md", "version locale"],
+    ]);
+  });
+
+  it("conflict_during_inflight_write_rewrites_local_version", async () => {
+    const tabs = setup();
+    await tabs.open("a.md");
+    let release!: () => void;
+    io.writeNote.mockImplementationOnce(async (rel: string, content: string) => {
+      put(rel, content);
+      await new Promise<void>((r) => (release = r));
+      return disk.get(rel)!.mtime_ms;
+    });
+    editors.get("a.md")!.type("local");
+    const flushing = tabs.flushAll();
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    put("a.md", "externe"); // l'écriture externe arrive après la nôtre
+    const checking = tabs.externalChange(["a.md"]);
+    await new Promise((r) => setTimeout(r, 0)); // la vérification voit l'écriture encore en cours
+    release();
+    await flushing;
+    await checking;
+    expect(io.createNote).toHaveBeenCalledWith("", "a (conflit 2026-10-24 1830)");
+    expect(disk.get("a (conflit 2026-10-24 1830).md")!.content).toBe("externe");
+    expect(disk.get("a.md")!.content).toBe("local");
+  });
+
+  it("lockUnder_holds_writes_until_released_then_saves_to_new_path", async () => {
+    const tabs = setup();
+    await tabs.open("Projets/MDnote.md");
+    editors.get("Projets/MDnote.md")!.type("pendant le renommage");
+    const release = await tabs.lockUnder("Projets");
+    let flushed = false;
+    const flushing = tabs.flushAll().then(() => (flushed = true));
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(io.writeNote).not.toHaveBeenCalled();
+    expect(flushed).toBe(false);
+    tabs.renamed("Projets", "Archive");
+    release();
+    await flushing;
+    expect(io.writeNote.mock.calls).toEqual([["Archive/MDnote.md", "pendant le renommage"]]);
+  });
+
+  it("lockUnder_waits_for_inflight_write_and_deleted_tab_never_writes", async () => {
+    const tabs = setup();
+    await tabs.open("a.md");
+    let release!: () => void;
+    io.writeNote.mockImplementationOnce(async (rel: string, content: string) => {
+      await new Promise<void>((r) => (release = r));
+      put(rel, content);
+      return disk.get(rel)!.mtime_ms;
+    });
+    const ed = editors.get("a.md")!;
+    ed.type("v1");
+    void tabs.flushAll().catch(() => {});
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    let locked: (() => void) | null = null;
+    const lockP = tabs.lockUnder("a.md").then((r) => (locked = r));
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(locked).toBeNull();
+    release();
+    await lockP;
+    ed.type("v2");
+    const flushing = tabs.flushAll();
+    tabs.deleted("a.md");
+    locked!();
+    await flushing;
+    expect(io.writeNote).toHaveBeenCalledTimes(1);
+    expect(disk.get("a.md")!.content).toBe("v1");
+  });
+
   it("restore_opens_active_first_and_skips_missing_files", async () => {
     const tabs = setup();
     const r = tabs.restore(["a.md", "gone.md", "b.md", "c.md"], "b.md");
