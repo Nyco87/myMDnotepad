@@ -176,3 +176,29 @@ describe("exported commands", () => {
     expect(ed.view.state.doc.firstChild!.childCount).toBe(1);
   });
 });
+
+describe("sticky blocks and wrapped lines", () => {
+  it("arrow_down_on_wrapped_non_last_visual_line_does_not_leave", () => {
+    const ed = makeEditor("> q\n\nafter\n");
+    cursorAtEnd(ed.view, "first");
+    ed.view.endOfTextblock = () => false;
+    expect(pressKey(ed.view, "ArrowDown")).toBe(false);
+    expect(ed.view.state.selection.$from.parent.textContent).toBe("q");
+  });
+
+  it("arrow_down_leaves_when_last_visual_line", () => {
+    const ed = makeEditor("```\ncode\n```\n\nafter\n");
+    cursorAtEnd(ed.view, "first");
+    ed.view.endOfTextblock = () => true;
+    expect(pressKey(ed.view, "ArrowDown")).toBe(true);
+    expect(ed.view.state.selection.$from.parent.textContent).toBe("after");
+  });
+
+  it("stored_bold_survives_em_input_rule", () => {
+    const ed = makeEditor("");
+    pressKey(ed.view, "b", { ctrl: true });
+    typeInto(ed.view, "*x*");
+    const marks = ed.view.state.doc.firstChild!.firstChild!.marks.map((m) => m.type.name).sort();
+    expect(marks).toEqual(["em", "strong"]);
+  });
+});

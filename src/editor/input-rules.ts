@@ -21,7 +21,7 @@ function markRule(pattern: RegExp, markType: MarkType, markerLength: number): In
     const lead = match[0].length - (2 * markerLength + content.length);
     const textStart = start + lead;
     // Text typed so far in the doc ends at `end`; the last marker char is still being typed.
-    const cursorMarks = state.doc.resolve(end).marks();
+    const cursorMarks = state.storedMarks ?? state.doc.resolve(end).marks();
     const tr = state.tr.replaceWith(
       textStart,
       end,

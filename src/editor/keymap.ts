@@ -134,7 +134,7 @@ const enterInBlockquote: Command = (state, dispatch) => {
  * The cursor then moves to the next block, or a new empty paragraph is created
  * if the block is the last of its parent.
  */
-const arrowDownLeavesBlock: Command = (state, dispatch) => {
+const arrowDownLeavesBlock: Command = (state, dispatch, view) => {
   const { $from, empty } = state.selection;
   if (!empty || !$from.parent.isTextblock) return false;
   const { blockquote, paragraph } = state.schema.nodes;
@@ -159,6 +159,17 @@ const arrowDownLeavesBlock: Command = (state, dispatch) => {
       if (child.type.name === "hard_break" && offset >= $from.parentOffset) hasBreakAfter = true;
     });
     if (hasBreakAfter) return false;
+  }
+
+  // Soft-wrapped text: only leave from the last *visual* line. Without layout (jsdom) endOfTextblock throws; keep the structural answer.
+  if (view) {
+    let lastVisualLine = true;
+    try {
+      lastVisualLine = view.endOfTextblock("down");
+    } catch {
+      /* no layout */
+    }
+    if (!lastVisualLine) return false;
   }
 
   const after = $from.after(stickyDepth);
