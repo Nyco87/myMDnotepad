@@ -123,19 +123,23 @@ const enterInBlockquote: Command = (state, dispatch) => {
   return true;
 };
 
+/** Set once an unexpected `endOfTextblock` failure has been logged. */
+let warnedLayout = false;
+
 /**
  * ArrowDown on the last line of a blockquote / code block leaves it.
  *
- * "Last line" is decided structurally, not with `view.endOfTextblock("down")`,
- * which needs layout (absent in jsdom) and is also less deterministic with
- * soft-wrapped text:
- *  - code_block: no "\n" after the cursor;
- *  - blockquote: the cursor's textblock is the last block at every level inside
- *    the quote and has no hard_break after the cursor.
+ * Two checks, both required:
+ *  1. structural: code_block has no "
+" after the cursor; blockquote: the
+ *     cursor's textblock is the last block at every level inside the quote and
+ *     has no hard_break after the cursor;
+ *  2. visual: `view.endOfTextblock("down")`, so soft-wrapped text only leaves from
+ *     its last visual line. It needs layout; where there is none (jsdom) it throws
+ *     and the check is skipped (structural answer kept).
  * The cursor then moves to the next block, or a new empty paragraph is created
  * if the block is the last of its parent.
  */
-let warnedLayout = false;
 const arrowDownLeavesBlock: Command = (state, dispatch, view) => {
   const { $from, empty } = state.selection;
   if (!empty || !$from.parent.isTextblock) return false;
@@ -170,7 +174,7 @@ const arrowDownLeavesBlock: Command = (state, dispatch, view) => {
       lastVisualLine = view.endOfTextblock("down");
     } catch (err) {
       // Expected without layout (jsdom): getClientRects / elementFromPoint are missing.
-      if (!warnedLayout && !/getClientRects|getBoundingClientRect|elementFromPoint|not a function|not implemented/i.test(String(err))) {
+      if (!warnedLayout && !/getClientRects|getBoundingClientRect|elementFromPoint/i.test(String(err))) {
         warnedLayout = true;
         console.warn("endOfTextblock failed unexpectedly", err);
       }

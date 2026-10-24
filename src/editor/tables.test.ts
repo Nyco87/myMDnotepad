@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { TextSelection } from "prosemirror-state";
 import type { Node as PMNode } from "prosemirror-model";
 import { makeEditor, pressKey, setCursor } from "./test-helpers";
-import { insertTable, setColumnAlign, deleteColumnCmd, deleteRowCmd, addRowAfterCmd } from "./tables";
+import { addRowBeforeCmd, insertTable, setColumnAlign, deleteColumnCmd, deleteRowCmd, addRowAfterCmd } from "./tables";
 
 const MD3 = "| a | b |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n";
 
@@ -108,5 +108,32 @@ describe("tables", () => {
     setCursor(ed.view, 2);
     expect(deleteColumnCmd(ed.view.state)).toBe(false);
     expect(TextSelection).toBeDefined();
+  });
+
+  const checkHeaderInvariant = (ed: ReturnType<typeof makeEditor>, texts: string[]) => {
+    const t = findTable(ed.view.state.doc)!.node;
+    t.child(0).forEach((c) => expect(c.type.name).toBe("table_header"));
+    for (let r = 1; r < t.childCount; r++) t.child(r).forEach((c) => expect(c.type.name).toBe("table_cell"));
+    const md = ed.getMarkdown();
+    for (const x of texts) expect(md).toContain(x);
+    expect(md.split("\n")[1]).toMatch(/^\|?\s*:?-+:?\s*\|/);
+    const again = makeEditor(md);
+    expect(again.getMarkdown()).toBe(md);
+  };
+
+  it("insert_row_above_header_keeps_valid_gfm_table", () => {
+    const ed = makeEditor(MD3);
+    setCursor(ed.view, cellPos(ed.view.state.doc, 0, 0));
+    expect(addRowBeforeCmd(ed.view.state, ed.view.dispatch)).toBe(true);
+    expect(findTable(ed.view.state.doc)!.node.childCount).toBe(4);
+    checkHeaderInvariant(ed, ["a", "b", "1", "2", "3", "4"]);
+  });
+
+  it("delete_header_row_keeps_valid_gfm_table", () => {
+    const ed = makeEditor(MD3);
+    setCursor(ed.view, cellPos(ed.view.state.doc, 0, 0));
+    expect(deleteRowCmd(ed.view.state, ed.view.dispatch)).toBe(true);
+    expect(findTable(ed.view.state.doc)!.node.childCount).toBe(2);
+    checkHeaderInvariant(ed, ["1", "2", "3", "4"]);
   });
 });

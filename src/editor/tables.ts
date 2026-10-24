@@ -51,8 +51,33 @@ export function insertTable(rows: number, cols: number): Command {
   };
 }
 
-export const addRowAfterCmd: Command = (s, d) => addRowAfter(s, d);
-export const addRowBeforeCmd: Command = (s, d) => addRowBefore(s, d);
+/**
+ * Runs a row command, then restores the GFM invariant: row 0 holds table_header cells and
+ * every other row table_cell (inserting above / deleting the header row would break it).
+ */
+function keepHeaderRow(cmd: Command): Command {
+  return (state, dispatch) => {
+    let result: Transaction | null = null;
+    if (!cmd(state, (tr) => (result = tr))) return false;
+    if (!dispatch) return true;
+    const tr: Transaction = result!;
+    const t = isInTable(state) ? findTable(tr.selection.$from) : null;
+    if (t) {
+      const { table_header, table_cell } = state.schema.nodes;
+      t.node.forEach((row, rowOff, r) => {
+        const want = r === 0 ? table_header : table_cell;
+        row.forEach((cell, cellOff) => {
+          if (cell.type !== want) tr.setNodeMarkup(t.start + rowOff + 1 + cellOff, want, cell.attrs);
+        });
+      });
+    }
+    dispatch(tr);
+    return true;
+  };
+}
+
+export const addRowAfterCmd: Command = keepHeaderRow(addRowAfter);
+export const addRowBeforeCmd: Command = keepHeaderRow(addRowBefore);
 export const addColumnAfterCmd: Command = (s, d) => addColumnAfter(s, d);
 export const addColumnBeforeCmd: Command = (s, d) => addColumnBefore(s, d);
 
@@ -61,7 +86,7 @@ export const deleteRowCmd: Command = (state, dispatch) => {
   if (!isInTable(state)) return false;
   const t = findTable(state.selection.$from);
   if (t && t.node.childCount <= 1) return deleteTable(state, dispatch);
-  return deleteRow(state, dispatch);
+  return keepHeaderRow(deleteRow)(state, dispatch);
 };
 
 /** Deleting the only remaining column removes the whole table. */
@@ -188,9 +213,12 @@ export function tableControlsPlugin(): Plugin {
         rowBtn.style.width = `${r.width}px`;
       };
       update(view);
+      const onResize = (): void => update(view);
+      window.addEventListener("resize", onResize);
       return {
         update,
         destroy() {
+          window.removeEventListener("resize", onResize);
           colBtn.remove();
           rowBtn.remove();
         },
