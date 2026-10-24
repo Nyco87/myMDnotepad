@@ -11,6 +11,7 @@ import type { NodeViewConstructor } from "prosemirror-view";
 import { schema } from "../markdown/schema";
 import { buildInputRules } from "./input-rules";
 import { buildKeymap } from "./keymap";
+import { tableControlsPlugin } from "./tables";
 import { parseMarkdown } from "../markdown/parse";
 import { serializeMarkdown } from "../markdown/serialize";
 
@@ -45,6 +46,7 @@ function buildPlugins(schema: Schema): Plugin[] {
     gapCursor(),
     columnResizing(),
     tableEditing(),
+    tableControlsPlugin(),
   ];
 }
 

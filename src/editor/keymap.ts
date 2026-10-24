@@ -11,6 +11,7 @@ import { splitListItem } from "prosemirror-schema-list";
 import { Selection, TextSelection, type Command, type Plugin } from "prosemirror-state";
 import type { Schema } from "prosemirror-model";
 import { schema as defaultSchema } from "../markdown/schema";
+import { tabNextCell, tabPrevCell } from "./tables";
 
 /* ------------------------------------------------------------------ */
 /* Command factories (also used by the toolbar, task 10)               */
@@ -134,6 +135,7 @@ const enterInBlockquote: Command = (state, dispatch) => {
  * The cursor then moves to the next block, or a new empty paragraph is created
  * if the block is the last of its parent.
  */
+let warnedLayout = false;
 const arrowDownLeavesBlock: Command = (state, dispatch, view) => {
   const { $from, empty } = state.selection;
   if (!empty || !$from.parent.isTextblock) return false;
@@ -166,8 +168,12 @@ const arrowDownLeavesBlock: Command = (state, dispatch, view) => {
     let lastVisualLine = true;
     try {
       lastVisualLine = view.endOfTextblock("down");
-    } catch {
-      /* no layout */
+    } catch (err) {
+      // Expected without layout (jsdom): getClientRects / elementFromPoint are missing.
+      if (!warnedLayout && !/getClientRects|getBoundingClientRect|elementFromPoint|not a function|not implemented/i.test(String(err))) {
+        warnedLayout = true;
+        console.warn("endOfTextblock failed unexpectedly", err);
+      }
     }
     if (!lastVisualLine) return false;
   }
@@ -234,7 +240,9 @@ export function buildKeymap(schema: Schema = defaultSchema): Plugin {
     ),
     ArrowDown: arrowDownLeavesBlock,
 
-    // Task 9 adds Tab / Shift-Tab (table cell navigation) here.
+    // Table cell navigation; both return false outside a table so Tab keeps its default behaviour.
+    Tab: tabNextCell,
+    "Shift-Tab": tabPrevCell,
   };
   for (let level = 1; level <= 6; level++) {
     bindings[`Mod-${level}`] = setHeading(level as 1 | 2 | 3 | 4 | 5 | 6);

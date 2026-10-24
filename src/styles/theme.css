@@ -133,3 +133,64 @@ body {
   outline-offset: 1px;
 }
 .ProseMirror-gapcursor:after { border-top: 1px solid var(--text); }
+
+/* ---- Table assistant ---- */
+#app { position: relative; }
+.tbl-add {
+  position: absolute;
+  min-width: 20px;
+  min-height: 20px;
+  padding: 0;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--accent);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 5;
+}
+.tbl-add:hover { background: rgba(96, 205, 255, 0.18); border-color: var(--accent); }
+.tbl-add[hidden] { display: none; }
+.tbl-add.col { width: 20px; }
+.tbl-add.row { height: 20px; }
+
+.ctx-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 220px;
+  padding: 4px;
+  background: #2b2b2b;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.ctx-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ctx-item:hover, .ctx-item.active { background: rgba(255, 255, 255, 0.1); }
+.ctx-item.danger { color: #ff6b6b; }
+.ctx-item.danger:hover, .ctx-item.danger.active { background: rgba(255, 107, 107, 0.15); }
+
+.size-picker {
+  position: fixed;
+  z-index: 1000;
+  padding: 8px;
+  background: #2b2b2b;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.size-grid { display: grid; grid-template-columns: repeat(8, 18px); gap: 2px; }
+.size-cell { width: 18px; height: 18px; border: 1px solid var(--border); border-radius: 2px; }
+.size-cell.on { background: rgba(96, 205, 255, 0.35); border-color: var(--accent); }
+.size-label { margin-top: 6px; text-align: center; color: var(--text); }
