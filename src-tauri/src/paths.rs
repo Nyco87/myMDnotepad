@@ -2,7 +2,6 @@ use std::path::{Component, Path, PathBuf};
 
 /// Résout un chemin relatif (séparateur `/`) à l'intérieur de `root`.
 /// Refuse les chemins absolus, les `\` et tout `..` qui sortirait de la racine.
-#[allow(dead_code)] // utilisé par les tâches suivantes
 pub fn resolve(root: &Path, rel: &str) -> Result<PathBuf, String> {
     if rel.contains('\\') {
         return Err(format!("Chemin invalide (caractère « \\ » interdit) : {rel}"));
@@ -33,7 +32,6 @@ pub fn resolve(root: &Path, rel: &str) -> Result<PathBuf, String> {
 }
 
 /// Chemin relatif à `root`, avec `/` comme séparateur. Hors racine : chemin complet normalisé.
-#[allow(dead_code)] // utilisé par les tâches suivantes
 pub fn to_rel(root: &Path, abs: &Path) -> String {
     let rel = abs.strip_prefix(root).unwrap_or(abs);
     rel.components()

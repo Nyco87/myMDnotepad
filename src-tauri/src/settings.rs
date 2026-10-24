@@ -34,7 +34,6 @@ pub struct AppState {
 
 impl AppState {
     /// Dossier racine des notes, ou une erreur en français s'il n'est pas défini.
-    #[allow(dead_code)] // utilisé par les tâches suivantes
     pub fn root(&self) -> Result<PathBuf, String> {
         let s = self.settings.lock().map_err(|_| "Réglages indisponibles".to_string())?;
         s.root_dir
@@ -70,7 +69,8 @@ pub fn save(path: &Path, s: &Settings) -> Result<(), String> {
             .map_err(|e| format!("Impossible de créer le dossier des réglages : {e}"))?;
     }
     let json = serde_json::to_string_pretty(s).map_err(|e| e.to_string())?;
-    std::fs::write(path, json).map_err(|e| format!("Impossible d'enregistrer les réglages : {e}"))
+    crate::notes_fs::write_atomic(path, json.as_bytes())
+        .map_err(|e| format!("Impossible d'enregistrer les réglages : {e}"))
 }
 
 #[tauri::command]

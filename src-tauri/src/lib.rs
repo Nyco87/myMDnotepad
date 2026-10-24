@@ -1,3 +1,6 @@
+mod commands;
+mod file_ops;
+mod notes_fs;
 mod paths;
 mod settings;
 mod window_fx;
@@ -15,7 +18,15 @@ pub fn run() {
             settings::get_settings,
             settings::save_settings,
             settings::set_root,
-            settings::root_status
+            settings::root_status,
+            commands::list_tree,
+            commands::read_note,
+            commands::write_note,
+            commands::create_note,
+            commands::create_folder,
+            commands::rename_entry,
+            commands::move_entry,
+            commands::trash_entry
         ])
         .setup(|app| {
             let exe_dir = std::env::current_exe()

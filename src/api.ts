@@ -39,6 +39,35 @@ export function setWindowEffect(effect: WindowEffect): Promise<void> {
 
 /** URL utilisable dans le webview pour un fichier relatif à la racine (ex. "images/x.png"). */
 export function resolveAsset(rel: string): string {
-  const base = (root ?? "").replace(/[\/]+$/, "");
+  const base = (root ?? "").replace(/[\\/]+$/, "");
   return convertFileSrc(`${base}/${rel}`);
+}
+
+export type TreeNode = { name: string; rel: string; is_dir: boolean; children: TreeNode[] };
+export type NoteFile = { rel: string; content: string; mtime: number };
+
+export function listTree(): Promise<TreeNode> {
+  return invoke<TreeNode>("list_tree");
+}
+export function readNote(rel: string): Promise<NoteFile> {
+  return invoke<NoteFile>("read_note", { rel });
+}
+/** Renvoie le mtime (ms) du fichier écrit. */
+export function writeNote(rel: string, content: string): Promise<number> {
+  return invoke<number>("write_note", { rel, content });
+}
+export function createNote(dirRel: string, baseName: string): Promise<string> {
+  return invoke<string>("create_note", { dirRel, baseName });
+}
+export function createFolder(dirRel: string, name: string): Promise<string> {
+  return invoke<string>("create_folder", { dirRel, name });
+}
+export function renameEntry(rel: string, newName: string): Promise<string> {
+  return invoke<string>("rename_entry", { rel, newName });
+}
+export function moveEntry(rel: string, destDirRel: string): Promise<string> {
+  return invoke<string>("move_entry", { rel, destDirRel });
+}
+export function trashEntry(rel: string): Promise<void> {
+  return invoke<void>("trash_entry", { rel });
 }
