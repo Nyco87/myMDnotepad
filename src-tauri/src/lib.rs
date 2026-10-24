@@ -1,16 +1,45 @@
+mod paths;
+mod settings;
 mod window_fx;
 
+use settings::AppState;
+use std::path::PathBuf;
+use std::sync::Mutex;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![window_fx::set_window_effect])
+        .invoke_handler(tauri::generate_handler![
+            window_fx::set_window_effect,
+            settings::get_settings,
+            settings::save_settings,
+            settings::set_root,
+            settings::root_status
+        ])
         .setup(|app| {
+            let exe_dir = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+                .unwrap_or_else(|| PathBuf::from("."));
+            let appdata = std::env::var_os("APPDATA")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| exe_dir.clone());
+            let settings_path = settings::settings_path(&exe_dir, &appdata);
+            let loaded = settings::load(&settings_path);
+            let effect = loaded.window_effect.clone();
+            app.manage(AppState {
+                settings_path,
+                settings: Mutex::new(loaded),
+            });
+
             let window = app
                 .get_webview_window("main")
                 .ok_or("fenêtre principale introuvable")?;
-            window_fx::apply(&window, "acrylic")?;
+            // Ne jamais interrompre le démarrage à cause de l'effet de fenêtre.
+            if window_fx::apply(&window, &effect).is_err() {
+                let _ = window_fx::apply(&window, "mica");
+            }
             window.show()?;
             Ok(())
         })
