@@ -329,8 +329,9 @@ describe("tabs controller", () => {
   it("lockUnder_holds_writes_until_released_then_saves_to_new_path", async () => {
     const tabs = setup();
     await tabs.open("Projets/MDnote.md");
-    editors.get("Projets/MDnote.md")!.type("pendant le renommage");
+    // lockUnder enregistre d'abord les frappes en file (revue finale #3) : on tape donc pendant le verrou.
     const release = await tabs.lockUnder("Projets");
+    editors.get("Projets/MDnote.md")!.type("pendant le renommage");
     let flushed = false;
     const flushing = tabs.flushAll().then(() => (flushed = true));
     for (let i = 0; i < 5; i++) await Promise.resolve();
@@ -402,6 +403,73 @@ describe("tabs controller", () => {
     expect(tabs.list()).toEqual([]);
     expect(messages.some((m) => m.includes(msg))).toBe(true);
     expect(io.writeNote).not.toHaveBeenCalled();
+  });
+
+  it("rename_with_queued_edit_keeps_backend_rewritten_image_links", async () => {
+    // Régression (revue finale #3) : une frappe en file pendant un renommage réécrivait les anciens liens d'images.
+    put("n.md", "![](images/n-1.png)\n");
+    const tabs = setup();
+    await tabs.open("n.md");
+    editors.get("n.md")!.type("![](images/n-1.png)\nhello\n"); // en file (debounce pas encore tiré)
+    const release = await tabs.lockUnder("n.md"); // sidebar.mutate
+    // Backend rename_entry + follow_note : renomme et réécrit les liens des images possédées.
+    const before = disk.get("n.md")!.content;
+    disk.delete("n.md");
+    put("m.md", before.replace("images/n-1.png", "images/m-1.png"));
+    await tabs.renamed("n.md", "m.md");
+    release();
+    await tabs.flushAll();
+    await tabs.externalChange(["m.md"]); // écho du watcher
+    expect(disk.get("m.md")!.content).toBe("![](images/m-1.png)\nhello\n");
+    expect(editors.get("n.md")!.getMarkdown()).toBe("![](images/m-1.png)\nhello\n");
+    expect(disk.has("n.md")).toBe(false);
+    expect(io.createNote).not.toHaveBeenCalled();
+  });
+
+  it("edit_typed_during_rename_keeps_both_versions", async () => {
+    put("n.md", "![](images/n-1.png)\n");
+    const tabs = setup();
+    await tabs.open("n.md");
+    const release = await tabs.lockUnder("n.md");
+    editors.get("n.md")!.type("![](images/n-1.png)\npendant\n"); // frappe pendant l'opération backend
+    disk.delete("n.md");
+    put("m.md", "![](images/m-1.png)\n");
+    await tabs.renamed("n.md", "m.md");
+    release();
+    await tabs.flushAll();
+    expect(disk.get("m.md")!.content).toBe("![](images/n-1.png)\npendant\n");
+    expect(disk.get("m (conflit 2026-10-24 1830).md")!.content).toBe("![](images/m-1.png)\n");
+  });
+
+  it("folder_rename_reloads_open_notes_inside", async () => {
+    const tabs = setup();
+    await tabs.open("Projets/MDnote.md");
+    const release = await tabs.lockUnder("Projets");
+    disk.delete("Projets/MDnote.md");
+    put("Archive/MDnote.md", "# MDnote\n![](../images/x.png)"); // lien réécrit par le backend
+    await tabs.renamed("Projets", "Archive");
+    release();
+    expect(editors.get("Projets/MDnote.md")!.setMarkdown).toHaveBeenCalledWith("# MDnote\n![](../images/x.png)");
+    editors.get("Projets/MDnote.md")!.type("# MDnote\n![](../images/x.png)\nsuite");
+    await tabs.flushAll();
+    expect(disk.get("Archive/MDnote.md")!.content).toBe("# MDnote\n![](../images/x.png)\nsuite");
+    expect(io.createNote).not.toHaveBeenCalled();
+  });
+
+  it("lockUnder_rejects_when_pending_edit_cannot_be_saved", async () => {
+    const tabs = setup();
+    await tabs.open("a.md");
+    io.writeNote.mockRejectedValue("Disque plein");
+    editors.get("a.md")!.type("A2");
+    await expect(tabs.lockUnder("a.md")).rejects.toThrow(/Disque plein/);
+    // Pas de verrou laissé en place : une écriture réussie passe ensuite.
+    io.writeNote.mockReset();
+    io.writeNote.mockImplementation(async (rel: string, content: string) => {
+      put(rel, content);
+      return disk.get(rel)!.mtime_ms;
+    });
+    await tabs.flushAll();
+    expect(disk.get("a.md")!.content).toBe("A2");
   });
 
   it("restore_opens_active_first_and_skips_missing_files", async () => {

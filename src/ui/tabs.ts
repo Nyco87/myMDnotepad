@@ -38,8 +38,11 @@ export interface TabsController {
   close(rel: string): Promise<boolean>;
   activate(rel: string): void;
   next(dir: 1 | -1): void;
-  /** Une note ou un dossier a changé de chemin : remappe l'onglet exact et ceux sous `oldRel + "/"`. */
-  renamed(oldRel: string, newRel: string): void;
+  /**
+   * Une note ou un dossier a changé de chemin : remappe l'onglet exact et ceux sous `oldRel + "/"`, puis relit
+   * chacune de ces notes à son nouveau chemin (liens d'images réécrits par le backend). À appeler sous `lockUnder`.
+   */
+  renamed(oldRel: string, newRel: string): Promise<void>;
   /** Une note ou un dossier est parti à la Corbeille : ferme sans enregistrer (sinon le fichier serait recréé). */
   deleted(rel: string): void;
   flushAll(): Promise<void>;
@@ -51,8 +54,9 @@ export interface TabsController {
   /** À appeler sur `fs-changed` : recharge, ignore l'écho de nos écritures ou crée une copie de conflit. */
   externalChange(paths: string[]): Promise<void>;
   /**
-   * Avant de renommer, déplacer ou supprimer `prefix` (note ou dossier) : attend la fin des écritures en cours des
-   * onglets concernés et suspend les suivantes jusqu'à l'appel de la fonction renvoyée. Appeler `renamed`/`deleted`
+   * Avant de renommer, déplacer ou supprimer `prefix` (note ou dossier) : enregistre les frappes en file des onglets
+   * concernés (rejette si c'est impossible : l'opération doit être annulée), attend la fin des écritures en cours
+   * et suspend les suivantes jusqu'à l'appel de la fonction renvoyée. Appeler `renamed`/`deleted`
    * AVANT de libérer : les écritures en attente iront au nouveau chemin (ou n'auront pas lieu si l'onglet est fermé).
    */
   lockUnder(prefix: string): Promise<() => void>;
@@ -204,6 +208,30 @@ export function createTabs(o: TabsOptions): TabsController {
     tab.lastKnownMtime = file.mtime_ms;
     if (file.content !== tab.diskKnown && file.content !== local) tab.conflicts.push({ content: file.content, copy: null });
     tab.diskKnown = file.content;
+  };
+
+  /** Après un renommage/déplacement : relit la note à son nouveau chemin et remplace le contenu de l'éditeur. */
+  const reloadAfterMove = async (tab: Tab): Promise<void> => {
+    const rel = tab.rel;
+    let file: NoteFile;
+    try {
+      file = await o.io.readNote(rel);
+    } catch {
+      return; // illisible : l'écriture suivante passera par le compare-and-swap
+    }
+    if (tab.closed || tab.rel !== rel) return;
+    tab.lastKnownMtime = file.mtime_ms;
+    if (file.content === tab.diskKnown) return; // aucun lien réécrit
+    if (tab.saver.pending() || tab.conflicts.length > 0) {
+      // Frappe arrivée pendant l'opération : on garde la version locale et la version réécrite en copie de conflit.
+      tab.conflicts.push({ content: file.content, copy: null });
+      tab.diskKnown = file.content;
+      return;
+    }
+    tab.diskKnown = file.content;
+    tab.editor.setMarkdown(file.content);
+    tab.saver.markSaved(file.content);
+    changed();
   };
 
   const waitUnlocked = async (tab: Tab): Promise<void> => {
@@ -358,8 +386,8 @@ export function createTabs(o: TabsOptions): TabsController {
       show(tabs[(i + dir + tabs.length) % tabs.length].rel);
     },
 
-    renamed(oldRel, newRel) {
-      let touched = false;
+    async renamed(oldRel, newRel) {
+      const moved: Tab[] = [];
       for (const t of tabs) {
         if (!under(t.rel, oldRel)) continue;
         const next = newRel + t.rel.slice(oldRel.length);
@@ -367,9 +395,13 @@ export function createTabs(o: TabsOptions): TabsController {
         t.rel = next;
         t.opts.noteRel = next;
         t.missing = false;
-        touched = true;
+        moved.push(t);
       }
-      if (touched) changed();
+      if (moved.length === 0) return;
+      changed();
+      // Le backend a pu réécrire les liens d'images (note renommée/déplacée, ou liens sortant d'un dossier déplacé) :
+      // on recharge chaque note déplacée depuis son nouveau chemin, encore sous verrou, pour ne pas réécrire les anciens liens.
+      await Promise.all(moved.map((t) => reloadAfterMove(t)));
     },
 
     deleted(rel) {
@@ -403,9 +435,18 @@ export function createTabs(o: TabsOptions): TabsController {
     },
 
     async lockUnder(prefix) {
+      // D'abord enregistrer les frappes en file : une écriture faite après le renommage partirait de l'ancien contenu
+      // (anciens liens d'images). Si l'enregistrement échoue, on refuse : l'appelant annule l'opération.
+      const held = tabs.filter((t) => under(t.rel, prefix));
+      for (const t of held) {
+        try {
+          await t.saver.flush();
+        } catch (e) {
+          throw new Error(`« ${noteTitle(t.rel)} » n'a pas pu être enregistrée, opération annulée : ${errText(e)}`);
+        }
+      }
       let unlock!: () => void;
       const lock = new Promise<void>((r) => (unlock = r));
-      const held = tabs.filter((t) => under(t.rel, prefix));
       for (const t of held) t.locks.add(lock);
       await Promise.all(held.map((t) => t.inflight?.catch(() => {})));
       return () => {

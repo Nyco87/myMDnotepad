@@ -11,7 +11,7 @@ export interface SidebarHandlers {
    * Pour un dossier, `oldRel`/`newRel` sont les chemins du DOSSIER : le contrôleur d'onglets doit
    * remapper par préfixe tout onglet dont le chemin commence par `oldRel + "/"`.
    */
-  onRenamed(oldRel: string, newRel: string): void;
+  onRenamed(oldRel: string, newRel: string): void | Promise<void>;
   /**
    * Une note ou un dossier est parti à la Corbeille. Pour un dossier, `rel` est le chemin du DOSSIER :
    * le contrôleur d'onglets doit fermer tout onglet dont le chemin commence par `rel + "/"`.
@@ -19,8 +19,9 @@ export interface SidebarHandlers {
   onDeleted(rel: string): void;
   /**
    * Appelé AVANT de renommer, déplacer ou supprimer `rel` (note ou dossier) : le contrôleur d'onglets attend ses
-   * écritures en cours et suspend les suivantes. La fonction renvoyée est appelée après `onRenamed`/`onDeleted`
-   * (ou après un échec), ce qui envoie les écritures en attente au nouveau chemin.
+   * frappes en file, attend ses écritures en cours et suspend les suivantes. La fonction renvoyée est appelée après
+   * `onRenamed`/`onDeleted` (ou après un échec), ce qui envoie les écritures en attente au nouveau chemin.
+   * S'il rejette (frappes impossibles à enregistrer), l'opération est annulée et l'erreur affichée.
    */
   beforeMutate?(rel: string): Promise<(() => void) | void>;
   /** Affiche une erreur (toast de l'app). Sans ce gestionnaire, un bandeau d'erreur s'affiche dans la barre latérale. */
@@ -272,16 +273,12 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
   // ---- Actions ----
 
   /** Verrouille les onglets touchés, applique `op`, prévient le contrôleur (`after`) puis libère. */
-  const mutate = async <T>(rel: string, op: () => Promise<T>, after: (result: T) => void): Promise<T> => {
-    let release: (() => void) | void = undefined;
-    try {
-      release = await handlers.beforeMutate?.(rel);
-    } catch {
-      // Verrou impossible : on continue, comme sans contrôleur d'onglets.
-    }
+  const mutate = async <T>(rel: string, op: () => Promise<T>, after: (result: T) => void | Promise<void>): Promise<T> => {
+    // Un rejet (note impossible à enregistrer avant l'opération) annule l'opération : l'appelant affiche l'erreur.
+    const release = await handlers.beforeMutate?.(rel);
     try {
       const result = await op();
-      after(result);
+      await after(result);
       return result;
     } finally {
       release?.();

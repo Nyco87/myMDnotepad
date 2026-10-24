@@ -353,6 +353,20 @@ describe("sidebar", () => {
     expect(release).toHaveBeenCalled();
   });
 
+  it("failed_lock_aborts_the_move", async () => {
+    const { row, handlers } = await setup();
+    const onError = vi.fn();
+    (handlers as any).onError = onError;
+    (handlers as any).beforeMutate = vi.fn(async () => {
+      throw new Error("« Courses » n'a pas pu être enregistrée : Disque plein");
+    });
+    row("Projets").dispatchEvent(dnd("drop", "Courses.md"));
+    await flush();
+    expect(api.moveEntry).not.toHaveBeenCalled();
+    expect(handlers.onRenamed).not.toHaveBeenCalled();
+    expect(onError.mock.calls.flat().join(" ")).toMatch(/Disque plein/);
+  });
+
   it("failed_move_releases_the_lock", async () => {
     vi.mocked(api.moveEntry).mockRejectedValueOnce("Impossible");
     const { row, handlers } = await setup();
