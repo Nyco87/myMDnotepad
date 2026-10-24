@@ -394,6 +394,7 @@ body {
   border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); color: var(--text); font-size: 12px; line-height: 1.4;
 }
 .toast[hidden] { display: none; }
+.toast-sticky { border-left-color: #e8a33d; cursor: pointer; }
 
 /* ---- First run ---- */
 .first-run { max-width: 460px; margin: 12vh auto 0; text-align: center; color: var(--text); }

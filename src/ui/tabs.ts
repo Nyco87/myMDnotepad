@@ -18,8 +18,8 @@ export interface TabsOptions {
   autosaveDelayMs?: number;
   /** Horloge (nom des copies de conflit). */
   now?: () => Date;
-  /** Message pour l'utilisateur (erreur, conflit). */
-  notify?: (message: string) => void;
+  /** Message pour l'utilisateur (erreur, conflit). `sticky` : reste affiché jusqu'au clic (avis de conflit). */
+  notify?: (message: string, opts?: { sticky?: boolean }) => void;
   /** Liste, onglet actif, marque « introuvable » ou contenu remplacé : la barre de titre/le bandeau doivent se mettre à jour. */
   onChange?: () => void;
 }
@@ -111,7 +111,7 @@ export function createTabs(o: TabsOptions): TabsController {
   const tabs: Tab[] = [];
   const opening = new Map<string, Promise<boolean>>();
   let activeRel: string | null = null;
-  const notify = (m: string): void => (o.notify ?? console.error)(m);
+  const notify = (m: string, opts?: { sticky?: boolean }): void => (o.notify ? o.notify(m, opts) : console.error(m));
   const changed = (): void => o.onChange?.();
   const now = o.now ?? (() => new Date());
   const find = (rel: string): Tab | undefined => tabs.find((t) => t.rel === rel);
@@ -271,7 +271,7 @@ export function createTabs(o: TabsOptions): TabsController {
       }
       await o.io.writeNote(c.copy, c.content);
       tab.conflicts.shift();
-      notify(`Note modifiée hors de MDnote : l'autre version est enregistrée dans « ${noteTitle(c.copy)} ».`);
+      notify(`Note modifiée hors de MDnote : l'autre version est enregistrée dans « ${noteTitle(c.copy)} ».`, { sticky: true });
     }
   };
 
@@ -336,6 +336,7 @@ export function createTabs(o: TabsOptions): TabsController {
         tab.conflicts.length > 0
           ? `Conflit sur « ${noteTitle(tab.rel)} » : copie de l'autre version impossible (${errText(e)}). La note ne sera pas enregistrée tant que la copie n'aura pas réussi.`
           : `Enregistrement de « ${noteTitle(tab.rel)} » impossible : ${errText(e)}`,
+        { sticky: tab.conflicts.length > 0 },
       );
     }
   };

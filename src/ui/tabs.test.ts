@@ -14,6 +14,7 @@ let io: {
   createNote: Mock<TabsIO["createNote"]>;
 };
 let messages: string[];
+let stickyMessages: string[];
 
 function put(rel: string, content: string): void {
   disk.set(rel, { content, mtime_ms: ++clock });
@@ -47,7 +48,10 @@ function setup(extra: { delay?: number } = {}): TabsController {
     makeEditor: fakeEditor,
     autosaveDelayMs: extra.delay ?? 10_000,
     now: () => new Date(2026, 9, 24, 18, 30),
-    notify: (m) => messages.push(m),
+    notify: (m, opts) => {
+      messages.push(m);
+      if (opts?.sticky) stickyMessages.push(m);
+    },
   });
 }
 
@@ -56,6 +60,7 @@ beforeEach(() => {
   clock = 1000;
   editors = new Map();
   messages = [];
+  stickyMessages = [];
   io = {
     readNote: vi.fn(async (rel: string) => {
       const f = disk.get(rel);
@@ -191,6 +196,8 @@ describe("tabs controller", () => {
     ]);
     expect(editors.get("Projets/MDnote.md")!.setMarkdown).not.toHaveBeenCalled();
     expect(messages.some((m) => m.includes("MDnote (conflit 2026-10-24 1830)"))).toBe(true);
+    // L'avis de conflit reste affiché jusqu'au clic (revue finale #7).
+    expect(stickyMessages.some((m) => m.includes("MDnote (conflit 2026-10-24 1830)"))).toBe(true);
   });
 
   it("own_write_echo_is_ignored", async () => {
@@ -290,6 +297,7 @@ describe("tabs controller", () => {
     await tabs.externalChange(["Projets/MDnote.md"]);
     expect(disk.get("Projets/MDnote.md")!.content).toBe("version externe");
     expect(messages.some((m) => m.includes("Disque plein"))).toBe(true);
+    expect(stickyMessages.some((m) => m.includes("Disque plein"))).toBe(true);
     await expect(tabs.flushAll()).rejects.toBeDefined();
     expect(await tabs.close("Projets/MDnote.md")).toBe(false);
     expect(disk.get("Projets/MDnote.md")!.content).toBe("version externe");
