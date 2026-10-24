@@ -17,6 +17,8 @@ export interface SidebarHandlers {
    * le contrôleur d'onglets doit fermer tout onglet dont le chemin commence par `rel + "/"`.
    */
   onDeleted(rel: string): void;
+  /** Affiche une erreur (toast de l'app). Sans ce gestionnaire, un bandeau d'erreur s'affiche dans la barre latérale. */
+  onError?(message: string): void;
 }
 
 export interface SidebarHandle {
@@ -33,7 +35,18 @@ const DEFAULT_NOTE = "Nouvelle note";
 const DEFAULT_FOLDER = "Nouveau dossier";
 const ERROR_MS = 4000;
 
-type Editing = { path: string; kind: "folder" | "note"; original: string; value: string; isNew: boolean; error: string | null };
+type Editing = {
+  path: string;
+  kind: "folder" | "note";
+  original: string;
+  value: string;
+  isNew: boolean;
+  error: string | null;
+  /** Donner le focus au champ au prochain rendu (seulement au début de l'édition). */
+  focusOnRender: boolean;
+  /** Renommage en cours (évite un double Entrée / Entrée puis perte de focus). */
+  committing: boolean;
+};
 
 const parentOf = (rel: string): string => (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "");
 const displayName = (n: { name: string; kind: string }): string => (n.kind === "note" ? n.name.replace(/\.md$/i, "") : n.name);
@@ -77,6 +90,10 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
   const kinds = new Map<string, "folder" | "note">();
 
   const showError = (msg: string): void => {
+    if (handlers.onError) {
+      handlers.onError(msg);
+      return;
+    }
     banner.textContent = msg;
     banner.hidden = false;
     if (bannerTimer) clearTimeout(bannerTimer);
@@ -102,27 +119,44 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
 
   // ---- Rendu ----
 
+  // Vrai pendant un rendu : la disparition du champ de saisie ne doit pas valider l'édition.
+  let rendering = false;
+
   const render = (): void => {
-    treeEl.textContent = "";
-    const children = tree?.children ?? [];
-    if (children.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "sb-empty";
-      empty.textContent = "Aucune note";
-      treeEl.appendChild(empty);
-      return;
-    }
-    const walk = (nodes: TreeNode[], depth: number): void => {
-      for (const n of nodes) {
-        treeEl.appendChild(renderRow(n, depth));
-        if (n.kind === "folder" && expanded.has(n.path)) walk(n.children ?? [], depth + 1);
+    // Le champ de saisie est recréé à chaque rendu : on ne lui rend le focus que s'il l'avait déjà,
+    // pour ne jamais le reprendre à l'éditeur (ou à un autre élément) après coup.
+    const old = treeEl.querySelector<HTMLInputElement>("input.sb-rename");
+    const hadFocus = !!old && document.activeElement === old;
+    const sel = hadFocus && old ? [old.selectionStart, old.selectionEnd] : null;
+    rendering = true;
+    try {
+      treeEl.textContent = "";
+      const children = tree?.children ?? [];
+      if (children.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "sb-empty";
+        empty.textContent = "Aucune note";
+        treeEl.appendChild(empty);
+        return;
       }
-    };
-    walk(children, 0);
-    const input = treeEl.querySelector<HTMLInputElement>("input.sb-rename");
-    if (input) {
-      input.focus();
-      input.select();
+      const walk = (nodes: TreeNode[], depth: number): void => {
+        for (const n of nodes) {
+          treeEl.appendChild(renderRow(n, depth));
+          if (n.kind === "folder" && expanded.has(n.path)) walk(n.children ?? [], depth + 1);
+        }
+      };
+      walk(children, 0);
+      const input = treeEl.querySelector<HTMLInputElement>("input.sb-rename");
+      if (input && editing?.focusOnRender) {
+        editing.focusOnRender = false;
+        input.focus();
+        input.select();
+      } else if (input && hadFocus) {
+        input.focus();
+        if (sel && sel[0] !== null && sel[1] !== null) input.setSelectionRange(sel[0], sel[1]);
+      }
+    } finally {
+      rendering = false;
     }
   };
 
@@ -163,6 +197,14 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
         }
       });
       input.addEventListener("click", (e) => e.stopPropagation());
+      input.addEventListener("blur", (e) => {
+        if (rendering || !editing || editing.path !== n.path) return;
+        // La fenêtre entière perd le focus (Alt+Tab) : l'édition continue au retour.
+        if (!document.hasFocus()) return;
+        const to = e.relatedTarget;
+        if (to instanceof HTMLElement && to.classList.contains("sb-rename")) return;
+        void commitEdit(input.value, true);
+      });
       wrap.appendChild(input);
       if (editing.error) {
         const err = document.createElement("div");
@@ -223,7 +265,7 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
 
   // ---- Actions ----
 
-  const refresh = async (): Promise<void> => {
+  const doRefresh = async (): Promise<void> => {
     try {
       tree = await api.listTree();
     } catch (e) {
@@ -238,6 +280,26 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
     }
     // Ne pas détruire le champ de saisie en cours : le rendu aura lieu à la fin de l'édition.
     if (!editing) render();
+  };
+
+  // Un seul rafraîchissement à la fois, plus au plus un rafraîchissement « de rattrapage » ensuite.
+  let refreshing: Promise<void> | null = null;
+  let trailing: Promise<void> | null = null;
+  const refresh = (): Promise<void> => {
+    if (!refreshing) {
+      const p: Promise<void> = doRefresh().finally(() => {
+        if (refreshing === p) refreshing = null;
+      });
+      refreshing = p;
+      return p;
+    }
+    if (!trailing) {
+      trailing = refreshing.then(() => {
+        trailing = null;
+        return refresh();
+      });
+    }
+    return trailing;
   };
 
   const onRowClick = (n: TreeNode): void => {
@@ -256,7 +318,7 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
   const startEdit = (path: string, isNew: boolean): void => {
     const kind = kinds.get(path) ?? (path.endsWith(".md") ? "note" : "folder");
     const original = baseOf(path);
-    editing = { path, kind, original, value: original, isNew, error: null };
+    editing = { path, kind, original, value: original, isNew, error: null, focusOnRender: true, committing: false };
     expandAncestors(path);
     render();
   };
@@ -264,26 +326,39 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
   const cancelEdit = (): void => {
     editing = null;
     render();
+    // Les rafraîchissements reçus pendant l'édition n'ont pas été affichés.
+    void refresh();
   };
 
-  const commitEdit = async (raw: string): Promise<void> => {
+  /** `fromBlur` : validation par perte de focus (un échec abandonne l'édition au lieu de garder le champ). */
+  const commitEdit = async (raw: string, fromBlur = false): Promise<void> => {
     const ed = editing;
-    if (!ed) return;
+    if (!ed || ed.committing) return;
     const name = raw.trim();
     ed.value = raw;
     if (name === ed.original) {
       editing = null;
       render();
+      void refresh();
       if (ed.isNew && ed.kind === "note") handlers.onOpen(ed.path);
       return;
     }
     let newPath: string;
+    ed.committing = true;
     try {
       newPath = await api.renameEntry(ed.path, name);
     } catch (e) {
+      ed.committing = false;
       if (editing === ed) {
-        ed.error = errText(e);
-        render();
+        if (fromBlur) {
+          editing = null;
+          showError(errText(e));
+          render();
+          void refresh();
+        } else {
+          ed.error = errText(e);
+          render();
+        }
       }
       return;
     }

@@ -236,4 +236,83 @@ describe("sidebar", () => {
     await flush();
     expect(api.moveEntry).not.toHaveBeenCalled();
   });
+  it("rename_commits_on_blur", async () => {
+    const { el, sb, handlers } = await setup();
+    await sb.newNote();
+    await flush();
+    const input = el.querySelector("input.sb-rename") as HTMLInputElement;
+    expect(document.activeElement).toBe(input);
+    input.value = "Par blur";
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
+    const other = document.createElement("button");
+    document.body.appendChild(other);
+    other.focus();
+    await flush();
+    expect(api.renameEntry).toHaveBeenCalledWith("Nouvelle note.md", "Par blur");
+    expect(handlers.onRenamed).toHaveBeenCalledWith("Nouvelle note.md", "Par blur.md");
+    expect(document.activeElement).toBe(other);
+    vi.mocked(document.hasFocus).mockRestore();
+  });
+
+  it("rerender_does_not_steal_focus_back", async () => {
+    const { el, sb, row } = await setup();
+    await sb.newNote();
+    await flush();
+    const input = el.querySelector("input.sb-rename") as HTMLInputElement;
+    // La fenêtre perd le focus (Alt+Tab) : pas de validation, et un rendu ne reprend pas le focus.
+    const hasFocus = vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    input.blur();
+    await flush();
+    expect(api.renameEntry).not.toHaveBeenCalled();
+    row("Courses.md").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    const again = el.querySelector("input.sb-rename") as HTMLInputElement;
+    expect(again).not.toBeNull();
+    expect(document.activeElement).not.toBe(again);
+    hasFocus.mockRestore();
+  });
+
+  it("double_enter_renames_once", async () => {
+    let release!: (v: string) => void;
+    vi.mocked(api.renameEntry).mockImplementationOnce(() => new Promise<string>((r) => (release = r)));
+    const { el, sb } = await setup();
+    await sb.newNote();
+    await flush();
+    const input = el.querySelector("input.sb-rename") as HTMLInputElement;
+    input.value = "Une fois";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    release("Une fois.md");
+    await flush();
+    expect(api.renameEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it("refresh_is_single_flight_with_one_trailing_run", async () => {
+    const { sb } = await setup();
+    const before = vi.mocked(api.listTree).mock.calls.length;
+    await Promise.all([sb.refresh(), sb.refresh(), sb.refresh(), sb.refresh()]);
+    expect(vi.mocked(api.listTree).mock.calls.length).toBe(before + 2);
+  });
+
+  it("cancel_edit_refreshes_the_tree", async () => {
+    const { el, sb } = await setup();
+    await sb.newNote();
+    await flush();
+    const before = vi.mocked(api.listTree).mock.calls.length;
+    const input = el.querySelector("input.sb-rename") as HTMLInputElement;
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await flush();
+    expect(vi.mocked(api.listTree).mock.calls.length).toBe(before + 1);
+  });
+
+  it("errors_go_to_onError_when_provided", async () => {
+    vi.mocked(api.createNote).mockRejectedValueOnce("Disque plein");
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const onError = vi.fn();
+    const sb = mountSidebar(el, { onOpen: vi.fn(), onRenamed: vi.fn(), onDeleted: vi.fn(), onError });
+    await sb.refresh();
+    await sb.newNote();
+    expect(onError).toHaveBeenCalledWith("Disque plein");
+    expect((el.querySelector(".sb-banner") as HTMLElement).hidden).toBe(true);
+  });
 });

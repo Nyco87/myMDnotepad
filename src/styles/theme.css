@@ -339,3 +339,53 @@ body {
 }
 .confirm-actions button:hover { background: rgba(255, 255, 255, 0.12); }
 .confirm-actions .confirm-ok { background: var(--accent); border-color: var(--accent); color: #0b2a38; font-weight: 600; }
+
+/* ---- App layout: title bar (tabs) → toolbar → sidebar | editor ---- */
+.app { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.app-body { display: flex; flex: 1; min-height: 0; }
+.sidebar-host { width: 220px; flex: none; min-height: 0; }
+.editor-host {
+  position: relative; flex: 1; min-width: 0; overflow: auto;
+  background: var(--editor-bg); border-top-left-radius: 8px;
+}
+.editor-pane { position: relative; min-height: 100%; }
+.editor-pane[hidden] { display: none; }
+.empty-state { padding: 48px 24px; color: #8a8a8a; text-align: center; }
+.empty-state[hidden] { display: none; }
+.no-root .toolbar-host, .no-root .sidebar-host { display: none; }
+.toolbar-host { flex: none; background: rgba(45, 45, 45, 0.95); }
+
+/* ---- Title bar & tabs (Windows Terminal style) ---- */
+.titlebar { display: flex; align-items: stretch; height: 36px; flex: none; padding-left: 8px; user-select: none; }
+.tabstrip { display: flex; align-items: flex-end; gap: 2px; min-width: 0; overflow: hidden; }
+.tab {
+  display: flex; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 72px; max-width: 220px;
+  padding: 6px 6px 6px 14px; border-radius: 6px 6px 0 0; color: #bbb; cursor: default;
+}
+.tab:hover { background: rgba(255, 255, 255, 0.05); }
+.tab.active { background: rgba(45, 45, 45, 0.95); color: #fff; }
+.tab.missing .tab-label { font-style: italic; opacity: 0.7; }
+.tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-close {
+  flex: none; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px;
+  background: transparent; color: #888; font-size: 11px; cursor: pointer;
+}
+.tab-close:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.tab-new {
+  flex: none; align-self: center; width: 28px; height: 28px; margin-left: 4px; padding: 0; border: 0; border-radius: 4px;
+  background: transparent; color: #ccc; font: inherit; font-size: 14px; cursor: pointer;
+}
+.tab-new:hover { background: rgba(255, 255, 255, 0.08); }
+.titlebar-drag { flex: 1; min-width: 40px; }
+.win-ctl { display: flex; flex: none; }
+.win-btn { width: 46px; padding: 0; border: 0; background: transparent; color: #ccc; font: inherit; cursor: default; }
+.win-btn:hover { background: rgba(255, 255, 255, 0.08); }
+.win-close:hover { background: #c42b1c; color: #fff; }
+
+/* ---- Toast (errors, conflicts) ---- */
+.toast {
+  position: fixed; right: 16px; bottom: 16px; z-index: 3000; max-width: 380px;
+  padding: 10px 14px; background: #2b2b2b; border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); color: var(--text); font-size: 12px; line-height: 1.4;
+}
+.toast[hidden] { display: none; }

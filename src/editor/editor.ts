@@ -31,6 +31,8 @@ export interface EditorOptions {
   markdown: string;
   onChange: (md: string) => void;
   noteRel: string;
+  /** Error message for the user (image paste failures). Read lazily, so it can be set after creation. */
+  onError?: (message: string) => void;
 }
 
 /**
@@ -49,7 +51,7 @@ function buildPlugins(schema: Schema, opts: EditorOptions): Plugin[] {
     columnResizing(),
     tableEditing(),
     tableControlsPlugin(),
-    imagePastePlugin(() => opts.noteRel),
+    imagePastePlugin(() => opts.noteRel, (m) => (opts.onError ?? console.error)(m)),
   ];
 }
 
