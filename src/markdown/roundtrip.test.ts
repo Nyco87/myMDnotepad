@@ -183,3 +183,18 @@ describe("URLs are kept readable (review fix)", () => {
   test("image src attr is the readable path", () =>
     expect(parseMarkdown("![s](images/schéma.png)\n").firstChild!.firstChild!.attrs.src).toBe("images/schéma.png"));
 });
+
+describe("highlight ==text==", () => {
+  test("highlight roundtrip", () => expect(pretty("un ==mot== ici\n")).toBe("un ==mot== ici\n"));
+  test("highlight with other marks", () => expect(pretty("**==a==** ~~==b==~~\n")).toBe("**==a==** ~~==b==~~\n"));
+  test("a==b stays literal", () => expect(pretty("a==b\n")).toBe("a==b\n"));
+  test("spaced == stays literal", () => expect(pretty("if x == y and y == z\n")).toBe("if x == y and y == z\n"));
+  test("== in code stays literal", () =>
+    expect(pretty("`a==b==c` and\n\n```\n==x==\n```\n")).toBe("`a==b==c` and\n\n```\n==x==\n```\n"));
+  test("parsed highlight is a mark", () =>
+    expect(parseMarkdown("==x==\n").firstChild!.firstChild!.marks[0].type.name).toBe("highlight"));
+  test("escaped == is text and stays escaped (no accidental highlight)", () => {
+    expect(parseMarkdown("\\=\\=x\\=\\=\n").firstChild!.firstChild!.marks.length).toBe(0);
+    expect(pretty("\\=\\=x\\=\\=\n")).toBe("\\=\\=x\\=\\=\n");
+  });
+});

@@ -100,6 +100,7 @@ describe("mark input rules", () => {
     ["**gras**", "strong", "gras"],
     ["*i*", "em", "i"],
     ["~~s~~", "strike", "s"],
+    ["==h==", "highlight", "h"],
     ["`c`", "code", "c"],
   ];
   for (const [input, mark, text] of cases) {

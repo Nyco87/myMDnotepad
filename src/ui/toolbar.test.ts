@@ -30,7 +30,7 @@ describe("toolbar", () => {
   it("has the buttons in the specified order with French tooltips", () => {
     const { el } = setup("a\n");
     const ids = [...el.querySelectorAll<HTMLElement>(".tb-btn")].map((b) => b.dataset.id);
-    expect(ids).toEqual(["bold", "italic", "strike", "code", "heading", "bullet", "ordered", "task", "quote", "codeblock", "table", "link", "image", "hr", "emoji"]);
+    expect(ids).toEqual(["bold", "italic", "strike", "highlight", "code", "heading", "bullet", "ordered", "task", "quote", "codeblock", "table", "link", "image", "hr", "emoji"]);
     expect((el.querySelector("[data-id=bold]") as HTMLElement).title).toBe("Gras (Ctrl+B)");
   });
 
@@ -44,6 +44,15 @@ describe("toolbar", () => {
     const { btn } = setup("a\n");
     expect(btn("strike").title).toBe("Barré (Ctrl+Shift+X)");
     expect(btn("strike").querySelector("s")?.textContent).toBe("S");
+  });
+
+  it("highlight button follows strike and toggles the mark", () => {
+    const { ed, btn } = setup("hello\n");
+    expect(btn("highlight").title).toBe("Surligner (Ctrl+Shift+H)");
+    expect(btn("highlight").previousElementSibling).toBe(btn("strike"));
+    setRange(ed.view, 1, 6);
+    btn("highlight").click();
+    expect(ed.getMarkdown()).toBe("==hello==\n");
   });
 
   it("applies bold on click and reflects it as active", () => {

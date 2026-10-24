@@ -216,6 +216,11 @@ export const marks: Record<string, MarkSpec> = {
     toDOM: () => ["s", 0],
   },
 
+  highlight: {
+    parseDOM: [{ tag: "mark" }],
+    toDOM: () => ["mark", 0],
+  },
+
   link: {
     attrs: { href: {}, title: { default: null } },
     inclusive: false,

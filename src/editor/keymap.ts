@@ -17,7 +17,7 @@ import { tabNextCell, tabPrevCell } from "./tables";
 /* Command factories (also used by the toolbar, task 10)               */
 /* ------------------------------------------------------------------ */
 
-export function toggleMark(name: "strong" | "em" | "strike" | "code"): Command {
+export function toggleMark(name: "strong" | "em" | "strike" | "highlight" | "code"): Command {
   return (state, dispatch) => pmToggleMark(state.schema.marks[name])(state, dispatch);
 }
 
@@ -224,6 +224,7 @@ export function buildKeymap(schema: Schema = defaultSchema): Plugin {
     "Mod-b": toggleMark("strong"),
     "Mod-i": toggleMark("em"),
     "Mod-Shift-x": toggleMark("strike"),
+    "Mod-Shift-h": toggleMark("highlight"),
     "Mod-e": toggleMark("code"),
     "Mod-0": setHeading(0),
 

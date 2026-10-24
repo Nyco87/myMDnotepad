@@ -7,6 +7,7 @@ describe("shortcuts", () => {
     ["b", "strong", false],
     ["i", "em", false],
     ["X", "strike", true],
+    ["H", "highlight", true],
     ["e", "code", false],
   ];
   for (const [key, mark, shift] of marks) {

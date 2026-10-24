@@ -39,6 +39,22 @@ function escapeInline(text: string): string {
     .replace(/(\s)\\([*_])(?=\s)/g, "$1$2");
 }
 
+/**
+ * `==` that could open or close a highlight on re-parse is escaped (`\=\=`), so literal text never turns into a mark:
+ * not between spaces, and not inside a word (`a==b`, `x == y` stay as typed).
+ */
+function escapeHighlight(text: string): string {
+  return text.replace(/={2,}/g, (run, offset: number) => {
+    const prev = text[offset - 1];
+    const next = text[offset + run.length];
+    const space = (c: string | undefined): boolean => c !== undefined && /\s/.test(c);
+    const wordy = (c: string | undefined): boolean => c !== undefined && /[\p{L}\p{N}]/u.test(c);
+    if (space(prev) && space(next)) return run;
+    if (wordy(prev) && wordy(next)) return run;
+    return run.replace(/=/g, "\\=");
+  });
+}
+
 function isBreak(node: Node | null | undefined): boolean {
   return node?.type.name === "hard_break";
 }
@@ -256,7 +272,7 @@ const nodes: Record<string, NodeRule> = {
     }
     const afterBreak = isBreak(parent.maybeChild(index - 1)) && parent.type.name !== "heading";
     const lineStart = afterBreak || s.atBlockStart;
-    let out = escapeInline(state.esc(noNul(node.text!), lineStart));
+    let out = escapeHighlight(escapeInline(state.esc(noNul(node.text!), lineStart)));
     if (lineStart) out = escapeLineStart(out, afterBreak);
     state.text(out, false);
   },
@@ -266,6 +282,7 @@ const marks: Record<string, MarkRule> = {
   em: { open: "*", close: "*", mixable: true, expelEnclosingWhitespace: true },
   strong: { open: "**", close: "**", mixable: true, expelEnclosingWhitespace: true },
   strike: { open: "~~", close: "~~", mixable: true, expelEnclosingWhitespace: true },
+  highlight: { open: "==", close: "==", mixable: true, expelEnclosingWhitespace: true },
   link: {
     open(state, mark, parent, index) {
       const s = state as MarkdownSerializerState & { inAutolink?: boolean };

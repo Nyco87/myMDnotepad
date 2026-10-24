@@ -4,6 +4,7 @@ import type Token from "markdown-it/lib/token.mjs";
 import taskLists from "markdown-it-task-lists";
 import { MarkdownParser } from "prosemirror-markdown";
 import { Fragment, type Node } from "prosemirror-model";
+import { markPlugin } from "./mark-plugin";
 import { normalizeSource, rawPlugin, scanRaw } from "./raw";
 import { schema } from "./schema";
 
@@ -126,7 +127,7 @@ function cellAlign(tok: Token): string | null {
   return m ? m[1] : null;
 }
 
-export const markdownIt = MarkdownIt("commonmark").enable(["strikethrough", "table"]).use(taskLists).use(rawPlugin);
+export const markdownIt = MarkdownIt("commonmark").enable(["strikethrough", "table"]).use(taskLists).use(rawPlugin).use(markPlugin);
 markdownIt.core.ruler.after("github-task-lists", "mdnote-task-tokens", taskTokens);
 markdownIt.core.ruler.push("mdnote-cell-paragraphs", cellParagraphs);
 // Keep link/image destinations as written (after backslash unescaping) instead
@@ -166,6 +167,7 @@ export const parserTokens: ConstructorParameters<typeof MarkdownParser>[2] = {
   em: { mark: "em" },
   strong: { mark: "strong" },
   s: { mark: "strike" },
+  mark: { mark: "highlight" },
   link: { mark: "link", getAttrs: (tok) => ({ href: tok.attrGet("href"), title: tok.attrGet("title") || null }) },
   code_inline: { mark: "code", noCloseToken: true },
   table: { block: "table" },

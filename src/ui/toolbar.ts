@@ -32,7 +32,7 @@ export interface ToolbarHandle {
 /* State helpers                                                       */
 /* ------------------------------------------------------------------ */
 
-type MarkName = "strong" | "em" | "strike" | "code" | "link";
+type MarkName = "strong" | "em" | "strike" | "highlight" | "code" | "link";
 
 function markActive(state: EditorState, name: MarkName): boolean {
   const type = state.schema.marks[name];
@@ -186,6 +186,7 @@ export function mountToolbar(
         s.textContent = "S";
         return s;
       }, active: (s) => markActive(s, "strike"), command: () => toggleMark("strike") },
+      { id: "highlight", label: "A", title: "Surligner (Ctrl+Shift+H)", className: "b-highlight", active: (s) => markActive(s, "highlight"), command: () => toggleMark("highlight") },
       { id: "code", label: "</>", title: "Code en ligne (Ctrl+E)", className: "b-code", active: (s) => markActive(s, "code"), command: () => toggleMark("code") },
     ],
     [], // the heading dropdown goes here
