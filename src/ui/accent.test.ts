@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 
 const listeners: ((hex: string) => void)[] = [];
 vi.mock("../api", () => ({
