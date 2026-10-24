@@ -117,6 +117,18 @@ describe("raw — extra guarantees", () => {
     const md = "$$\na __b__\n\nc __d__\n";
     expect(pretty(md)).toBe("$$\na __b__\n\nc **d**\n");
   });
+  // Revue finale #4 : markdown-it tronque les lignes plus larges que l'en-tête ; le tableau reste donc brut.
+  test("table row with more cells than the header is kept byte for byte", () => {
+    expect(pretty("| a |\n|---|\n| b | extra |\n")).toBe("| a |\n|---|\n| b | extra |\n");
+    verbatim("| a | b |\n|:--|--:|\n| 1 | 2 | 3 |\n| 4 |");
+    expect(names(parseMarkdown("| a |\n|---|\n| b | extra |\n"))).toEqual(["raw_block"]);
+    for (const md of ["> | a |\n> |---|\n> | b | c |\n", "- x\n\n  | a |\n  |---|\n  | b | c |\n"])
+      expect(pretty(md)).toBe(md);
+    // Un pipe échappé n'est pas une cellule de plus.
+    expect(parseMarkdown("| a |\n|---|\n| `x\\|y` |\n").firstChild!.type.name).toBe("table");
+  });
+  test("table with fewer cells than the header stays a table", () =>
+    expect(parseMarkdown("| a | b |\n|---|---|\n| 1 |\n").firstChild!.type.name).toBe("table"));
   test("CRLF raw source comes out with LF", () =>
     expect(pretty("<div>\r\nx\r\n</div>\r\n")).toBe("<div>\nx\n</div>\n"));
 });
@@ -137,6 +149,7 @@ describe("parseMarkdown never throws (review)", () => {
     "| a |\n|---|\n| <b>x</b> | y |\n",
     "<details>\n\n```\n</details>\n```\n",
     "\u0000<\u0000>",
+    "| a |\n|---|\n| b | extra |\n",
   ];
   for (const md of NASTY)
     test(JSON.stringify(md), () => {

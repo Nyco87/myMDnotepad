@@ -234,6 +234,38 @@ function joinAdjacentRaw(state: StateCore): void {
   state.tokens = out;
 }
 
+/** markdown-it's own `table` rule (set by `rawPlugin`). */
+let tableRule: BlockRule = () => false;
+
+/** Number of cells markdown-it sees on a table line (same split as its `escapedSplit`, edge pipes dropped). */
+function cellCount(state: StateBlock, line: number): number {
+  const text = state.src.slice(state.bMarks[line] + state.tShift[line], state.eMarks[line]).trim();
+  let count = 1;
+  for (let i = 0; i < text.length; i++) if (text[i] === "|" && (i === 0 || text[i - 1] !== "\\")) count++;
+  if (text.startsWith("|")) count--;
+  if (text.length > 1 && text.endsWith("|") && text[text.length - 2] !== "\\") count--;
+  return count;
+}
+
+/**
+ * markdown-it drops the cells of a body row beyond the header's width ("| b | extra |" under "| a |"):
+ * such a table is kept as a raw block so saving never loses them.
+ */
+function tableOrRaw(state: StateBlock, startLine: number, endLine: number, silent: boolean): boolean {
+  const before = state.tokens.length;
+  if (!tableRule(state, startLine, endLine, silent)) return false;
+  if (silent) return true;
+  const end = state.line;
+  const width = cellCount(state, startLine);
+  let overflow = cellCount(state, startLine + 1) !== width;
+  for (let line = startLine + 2; line < end && !overflow; line++) overflow = cellCount(state, line) > width;
+  if (!overflow) return true;
+  state.tokens.length = before;
+  rawToken(state, startLine, end);
+  state.line = end;
+  return true;
+}
+
 export function rawPlugin(md: MarkdownIt): void {
   // `__rules__` is markdown-it internal, but the only way to reach a built-in rule.
   const rules = (md.block.ruler as unknown as { __rules__: { name: string; fn: BlockRule }[] }).__rules__;
@@ -241,6 +273,10 @@ export function rawPlugin(md: MarkdownIt): void {
   if (!reference) throw new Error("markdown-it reference rule not found");
   referenceRule = reference.fn;
   md.block.ruler.at("reference", referenceAsRaw);
+  const table = rules.find((r) => r.name === "table");
+  if (!table) throw new Error("markdown-it table rule not found");
+  tableRule = table.fn;
+  md.block.ruler.at("table", tableOrRaw, { alt: ["paragraph", "reference"] });
   md.block.ruler.before("table", "mdnote_raw", rawBlockRule);
   md.core.ruler.after("block", "mdnote_raw_join", joinAdjacentRaw);
 }
