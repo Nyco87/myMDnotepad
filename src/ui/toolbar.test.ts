@@ -34,6 +34,18 @@ describe("toolbar", () => {
     expect((el.querySelector("[data-id=bold]") as HTMLElement).title).toBe("Gras (Ctrl+B)");
   });
 
+  it("symbols_button_uses_omega_and_tooltip", () => {
+    const { btn } = setup("a\n");
+    expect(btn("emoji").textContent).toBe("Ω");
+    expect(btn("emoji").title).toBe("Symboles");
+  });
+
+  it("strike_button_is_explicit", () => {
+    const { btn } = setup("a\n");
+    expect(btn("strike").title).toBe("Barré (Ctrl+Shift+X)");
+    expect(btn("strike").querySelector("s")?.textContent).toBe("S");
+  });
+
   it("applies bold on click and reflects it as active", () => {
     const { ed, btn, tb } = setup("hello\n");
     setRange(ed.view, 1, 6);

@@ -1,4 +1,4 @@
-import { EditorState, Plugin, type Transaction } from "prosemirror-state";
+import { EditorState, Plugin, Selection, type Transaction } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { history } from "prosemirror-history";
 import { baseKeymap } from "prosemirror-commands";
@@ -68,6 +68,15 @@ export function createEditor(mount: HTMLElement, opts: EditorOptions): EditorHan
     return EditorState.create({ schema, doc, plugins: buildPlugins(schema, opts) });
   };
 
+  // Un clic sur la zone vide sous le texte place le curseur à la fin de la note.
+  const onPaneMouseDown = (e: MouseEvent): void => {
+    if (e.target !== mount) return;
+    e.preventDefault();
+    view.focus();
+    view.dispatch(view.state.tr.setSelection(Selection.atEnd(view.state.doc)).scrollIntoView());
+  };
+  mount.addEventListener("mousedown", onPaneMouseDown);
+
   const view = new EditorView(mount, {
     state: makeState(opts.markdown),
     nodeViews: buildNodeViews(opts),
@@ -86,6 +95,9 @@ export function createEditor(mount: HTMLElement, opts: EditorOptions): EditorHan
       view.updateState(makeState(md));
     },
     isDirty: () => serializeMarkdown(view.state.doc) !== baseline,
-    destroy: () => view.destroy(),
+    destroy() {
+      mount.removeEventListener("mousedown", onPaneMouseDown);
+      view.destroy();
+    },
   };
 }

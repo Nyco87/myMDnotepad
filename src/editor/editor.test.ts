@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
+import { TextSelection } from "prosemirror-state";
 import { createEditor } from "./editor";
 
 describe("editor", () => {
@@ -13,6 +14,23 @@ describe("editor", () => {
     expect(onChange).not.toHaveBeenCalled();
     expect(ed.isDirty()).toBe(false);
     ed.destroy();
+  });
+
+  it("click_below_content_moves_cursor_to_end", () => {
+    const mount = document.createElement("div");
+    mount.className = "editor-pane";
+    document.body.appendChild(mount);
+    const ed = createEditor(mount, { markdown: "un\n\ndeux\n", onChange: () => {}, noteRel: "a.md" });
+    ed.view.dispatch(ed.view.state.tr.setSelection(TextSelection.create(ed.view.state.doc, 1)));
+    mount.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    expect(ed.view.state.selection.from).toBe(ed.view.state.doc.content.size - 1);
+    expect(ed.view.hasFocus()).toBe(true);
+    // Un clic dans le texte n'est pas détourné.
+    ed.view.dispatch(ed.view.state.tr.setSelection(TextSelection.create(ed.view.state.doc, 1)));
+    ed.view.dom.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    expect(ed.view.state.selection.from).toBe(1);
+    ed.destroy();
+    mount.remove();
   });
 
   it("user_edit_calls_onChange_and_dirties", () => {

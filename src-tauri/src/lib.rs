@@ -36,7 +36,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             mark_ready,
-            window_fx::set_window_effect,
             settings::get_settings,
             settings::save_settings,
             settings::set_root,
@@ -62,7 +61,6 @@ pub fn run() {
                 .unwrap_or_else(|| exe_dir.clone());
             let settings_path = settings::settings_path(&exe_dir, &appdata);
             let loaded = settings::load(&settings_path);
-            let effect = loaded.window_effect.clone();
             if let Some(r) = loaded.root_dir.as_deref().filter(|r| std::path::Path::new(r).is_dir()) {
                 let _ = app.asset_protocol_scope().allow_directory(r, true);
             }
@@ -81,9 +79,7 @@ pub fn run() {
                 .get_webview_window("main")
                 .ok_or("fenêtre principale introuvable")?;
             // Ne jamais interrompre le démarrage à cause de l'effet de fenêtre.
-            if window_fx::apply(&window, &effect).is_err() {
-                let _ = window_fx::apply(&window, "mica");
-            }
+            let _ = window_fx::apply_acrylic_effect(&window);
             window.show()?;
             Ok(())
         })

@@ -7,11 +7,9 @@ import {
   markReady,
   rootStatus,
   saveSettings,
-  setWindowEffect,
   writeNote,
   type RootStatus,
   type Settings,
-  type WindowEffect,
 } from "./api";
 import { createEditor } from "./editor/editor";
 import { showContextMenu } from "./ui/context-menu";
@@ -108,7 +106,6 @@ async function main(): Promise<void> {
   });
 
   // ---- Menu « ⋯ » ----
-  let currentEffect: WindowEffect = "acrylic";
   const changeRoot = async (): Promise<void> => {
     try {
       await tabs?.flushAll();
@@ -128,23 +125,9 @@ async function main(): Promise<void> {
     }
     location.reload(); // ferme les onglets et repart sur l'écran de premier lancement
   };
-  const setEffect = async (effect: WindowEffect): Promise<void> => {
-    if (effect === currentEffect) return;
-    try {
-      await setWindowEffect(effect);
-      currentEffect = effect;
-      const s = await getSettings();
-      await saveSettings({ ...s, window_effect: effect });
-    } catch (e) {
-      toast(`Effet de fenêtre impossible : ${errText(e)}`);
-    }
-  };
   function openMenu(anchor: DOMRect): void {
-    const mark = (e: WindowEffect, label: string): string => `${currentEffect === e ? "✓ " : "   "}Effet de fenêtre : ${label}`;
     showContextMenu(anchor.left, anchor.bottom + 2, [
       { label: "Changer de dossier de notes…", action: () => void changeRoot() },
-      { label: mark("acrylic", "Acrylique"), action: () => void setEffect("acrylic") },
-      { label: mark("mica", "Mica"), action: () => void setEffect("mica") },
     ]);
   }
 
@@ -235,7 +218,6 @@ async function main(): Promise<void> {
   /** Monte l'espace de travail (onglets, bandeau, arborescence) pour le dossier courant. */
   const startWorkspace = async (settings: Settings): Promise<void> => {
     app.classList.remove("no-root");
-    currentEffect = settings.window_effect ?? "acrylic";
     ui.emptyState.hidden = false;
     ui.emptyState.textContent = "Aucune note ouverte — Ctrl+N pour en créer une";
 
@@ -297,7 +279,6 @@ async function main(): Promise<void> {
     } catch {
       /* stockage indisponible : on ignore */
     }
-    if (settings) currentEffect = settings.window_effect ?? "acrylic";
 
     if (!settings || forceChange || status !== "ok") {
       // Premier lancement, dossier introuvable ou changement de dossier.

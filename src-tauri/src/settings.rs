@@ -12,7 +12,6 @@ pub struct Settings {
     pub open_tabs: Vec<String>,
     pub active_tab: Option<String>,
     pub recent_emojis: Vec<String>,
-    pub window_effect: String,
 }
 
 impl Default for Settings {
@@ -22,7 +21,6 @@ impl Default for Settings {
             open_tabs: vec![],
             active_tab: None,
             recent_emojis: vec![],
-            window_effect: "acrylic".into(),
         }
     }
 }
@@ -138,13 +136,12 @@ mod tests {
         let d = tempdir().unwrap();
         let s = load(&d.path().join("nope.json"));
         assert_eq!(s.root_dir, None);
-        assert_eq!(s.window_effect, "acrylic");
     }
     #[test] fn load_corrupt_json_gives_defaults() {
         let d = tempdir().unwrap();
         let p = d.path().join("s.json");
         std::fs::write(&p, "{ not json").unwrap();
-        assert_eq!(load(&p).window_effect, "acrylic");
+        assert_eq!(load(&p), Settings::default());
     }
     #[test] fn load_partial_json_fills_defaults() {
         let d = tempdir().unwrap();
@@ -152,12 +149,17 @@ mod tests {
         std::fs::write(&p, r#"{"root_dir":"C:/n"}"#).unwrap();
         let s = load(&p);
         assert_eq!(s.root_dir.as_deref(), Some("C:/n"));
-        assert_eq!(s.window_effect, "acrylic");
+    }
+    #[test] fn old_settings_with_window_effect_still_load() {
+        let d = tempdir().unwrap();
+        let p = d.path().join("s.json");
+        std::fs::write(&p, r#"{"root_dir":"C:/n","window_effect":"mica"}"#).unwrap();
+        assert_eq!(load(&p).root_dir.as_deref(), Some("C:/n"));
     }
     #[test] fn save_then_load_roundtrip() {
         let d = tempdir().unwrap();
         let p = d.path().join("s.json");
-        let s = Settings { root_dir: Some("C:/n".into()), open_tabs: vec!["a.md".into()], active_tab: Some("a.md".into()), recent_emojis: vec!["x".into()], window_effect: "mica".into() };
+        let s = Settings { root_dir: Some("C:/n".into()), open_tabs: vec!["a.md".into()], active_tab: Some("a.md".into()), recent_emojis: vec!["x".into()] };
         save(&p, &s).unwrap();
         assert_eq!(load(&p), s);
     }

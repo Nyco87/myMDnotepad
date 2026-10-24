@@ -139,6 +139,8 @@ interface ButtonDef {
   title: string;
   className?: string;
   active?: (s: EditorState) => boolean;
+  /** Custom label content (e.g. an element); defaults to the text `label`. */
+  labelEl?: () => Node;
   /** Plain command run on the editor. */
   command?: (s: EditorState) => Command;
   /** Popup / async action. */
@@ -179,7 +181,11 @@ export function mountToolbar(
     [
       { id: "bold", label: "G", title: "Gras (Ctrl+B)", className: "b-bold", active: (s) => markActive(s, "strong"), command: () => toggleMark("strong") },
       { id: "italic", label: "I", title: "Italique (Ctrl+I)", className: "b-italic", active: (s) => markActive(s, "em"), command: () => toggleMark("em") },
-      { id: "strike", label: "S", title: "Barré (Ctrl+Maj+X)", className: "b-strike", active: (s) => markActive(s, "strike"), command: () => toggleMark("strike") },
+      { id: "strike", label: "S", title: "Barré (Ctrl+Shift+X)", className: "b-strike", labelEl: () => {
+        const s = document.createElement("s");
+        s.textContent = "S";
+        return s;
+      }, active: (s) => markActive(s, "strike"), command: () => toggleMark("strike") },
       { id: "code", label: "</>", title: "Code en ligne (Ctrl+E)", className: "b-code", active: (s) => markActive(s, "code"), command: () => toggleMark("code") },
     ],
     [], // the heading dropdown goes here
@@ -259,8 +265,8 @@ export function mountToolbar(
     [
       {
         id: "emoji",
-        label: "😀",
-        title: "Emoji",
+        label: "Ω",
+        title: "Symboles",
         popup: ".emoji-palette",
         run: async (btn, view) => {
           const settings = await getSettings();
@@ -303,7 +309,8 @@ export function mountToolbar(
     btn.type = "button";
     btn.className = "tb-btn" + (def.className ? ` ${def.className}` : "");
     btn.dataset.id = def.id;
-    btn.textContent = def.label;
+    if (def.labelEl) btn.appendChild(def.labelEl());
+    else btn.textContent = def.label;
     btn.title = def.title;
     btn.setAttribute("aria-label", def.title);
     btn.addEventListener("mousedown", (e) => e.preventDefault()); // never steal focus from the editor

@@ -226,7 +226,6 @@ body {
 .tb-btn.active { background: rgba(96, 205, 255, 0.22); color: var(--accent); }
 .tb-btn.b-bold { font-weight: 700; }
 .tb-btn.b-italic { font-style: italic; }
-.tb-btn.b-strike { text-decoration: line-through; }
 .tb-btn.b-code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; }
 .tb-heading { min-width: 96px; text-align: left; }
 .tb-sep { width: 1px; height: 18px; margin: 0 4px; background: var(--border); }
@@ -345,10 +344,11 @@ body {
 .app-body { display: flex; flex: 1; min-height: 0; }
 .sidebar-host { width: 220px; flex: none; min-height: 0; }
 .editor-host {
-  position: relative; flex: 1; min-width: 0; overflow: auto;
+  position: relative; flex: 1; min-width: 0; overflow: hidden;
   background: var(--editor-bg); border-top-left-radius: 8px;
 }
-.editor-pane { position: relative; min-height: 100%; }
+/* Chaque onglet occupe toute la hauteur et défile lui-même : aucune bande translucide sous le texte. */
+.editor-pane { position: relative; height: 100%; overflow-y: auto; background: var(--editor-bg); }
 .editor-pane[hidden] { display: none; }
 .empty-state { padding: 48px 24px; color: #8a8a8a; text-align: center; }
 .empty-state[hidden] { display: none; }

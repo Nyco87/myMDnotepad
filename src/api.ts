@@ -1,13 +1,11 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
-export type WindowEffect = "acrylic" | "mica";
 export type Settings = {
   root_dir: string | null;
   open_tabs: string[];
   active_tab: string | null;
   recent_emojis: string[];
-  window_effect: WindowEffect;
 };
 export type RootStatus = "ok" | "unset" | "missing";
 
@@ -37,10 +35,6 @@ export function rootStatus(): Promise<RootStatus> {
 /** Signale au backend que l'interface est affichée (mesure du temps de démarrage). */
 export function markReady(): Promise<void> {
   return invoke<void>("mark_ready");
-}
-
-export function setWindowEffect(effect: WindowEffect): Promise<void> {
-  return invoke<void>("set_window_effect", { effect });
 }
 
 /** URL utilisable dans le webview pour un fichier relatif à la racine (ex. "images/x.png"). */
