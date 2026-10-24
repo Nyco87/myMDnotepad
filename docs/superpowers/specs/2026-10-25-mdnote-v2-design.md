@@ -80,6 +80,13 @@ Légende : **[U]** = décidé par l'utilisateur ; **[C]** = proposé par Claude 
 8. **Menu « / »** : désactivé dans le code (bloc et en ligne) ; actif dans les cellules de tableau, où seules les commandes compatibles avec une cellule sont proposées (symboles, lien, image… pas de titre, liste, tableau, alerte ni schéma) ; dans un élément de liste ou une alerte, « transformer la ligne » s'applique au paragraphe courant quand le schéma le permet, sinon insertion après le bloc.
 9. **Accent** : variantes dérivées (survol, appui, teintes transparentes pour sélection et arborescence) calculées depuis l'accent ; les couleurs des alertes restent fixes (GitHub) ; mode contraste élevé hors périmètre.
 
+## 5bis. Retours du test du lot A [U] (à faire en tête du lot B)
+
+- **Lignes vides conservées** : la règle « pretty » devient « au moins une ligne vide entre blocs ». Chaque paragraphe vide entre deux blocs s'écrit comme une ligne vide supplémentaire et revient tel quel à la réouverture (aller-retour idempotent). Les paragraphes vides en fin de note ne sont pas conservés (un seul `\n` final).
+- **Insérer une ligne oubliée** : un clic dans l'espace entre deux blocs non textuels (tableau, alerte, code, schéma, séparateur…), ou flèche haut/bas, place un curseur d'espacement visible ; taper ou Entrée y crée un paragraphe.
+- **Bouton « Alerte ▾ »** dans le bandeau, après Citation : menu des 5 types (insère, ou change le type si le curseur est déjà dans une alerte).
+- **Surlignage dérivé de l'accent** : fond = teinte de l'accent Windows (remplace l'ambre fixe `#9a6700`), texte lisible garanti.
+
 ## 6. Laissé au constructeur
 - Moyen de lire l'accent Windows (API WinRT `UISettings`, registre DWM, ou couleur système CSS si WebView2 la fournit) tant que la mise à jour à chaud fonctionne.
 - Bibliothèque/plugin markdown-it pour `==` et pour les alertes, ou implémentation maison, tant que l'aller-retour reste idempotent et que les cas non reconnus restent intacts.
