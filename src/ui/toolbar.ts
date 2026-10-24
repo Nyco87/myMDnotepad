@@ -24,6 +24,8 @@ export interface ToolbarHandle {
    * selection change (e.g. a tab switch swapped the EditorView, or setMarkdown).
    */
   refresh(): void;
+  /** Removes the global listeners (selectionchange, popup tracking). */
+  destroy(): void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -156,6 +158,7 @@ export function mountToolbar(
   el: HTMLElement,
   getView: () => EditorView | null,
   getNoteRel: () => string = () => "",
+  onError: (message: string) => void = (m) => console.error(m),
 ): ToolbarHandle {
   el.classList.add("toolbar");
   el.setAttribute("role", "toolbar");
@@ -246,7 +249,7 @@ export function mountToolbar(
           try {
             await pickAndInsertImage(view, getNoteRel());
           } catch (err) {
-            console.error("image insert failed", err);
+            onError(`Insertion de l'image impossible : ${String(err)}`);
           }
           if (!view.isDestroyed) view.focus();
         },
@@ -276,18 +279,17 @@ export function mountToolbar(
     ],
   ];
 
+  const disposers: (() => void)[] = [];
   const buttons: { def: ButtonDef; btn: HTMLButtonElement }[] = [];
   /** Whether the button's popup was open at mousedown time (outside-click handlers close it first). */
   const wasOpen = new WeakMap<HTMLElement, boolean>();
   const trackPopup = (btn: HTMLElement, selector: string): void => {
     // Window capture runs before the popups' own document-capture "outside click" handlers.
-    window.addEventListener(
-      "mousedown",
-      (e) => {
-        if (btn.contains(e.target as Node)) wasOpen.set(btn, !!document.querySelector(selector));
-      },
-      true,
-    );
+    const onDown = (e: MouseEvent): void => {
+      if (btn.contains(e.target as Node)) wasOpen.set(btn, !!document.querySelector(selector));
+    };
+    window.addEventListener("mousedown", onDown, true);
+    disposers.push(() => window.removeEventListener("mousedown", onDown, true));
   };
   /** True when this click only closes the popup that the mousedown found open. */
   const closesPopup = (btn: HTMLElement): boolean => {
@@ -376,5 +378,6 @@ export function mountToolbar(
 
   document.addEventListener("selectionchange", refresh);
   refresh();
-  return { refresh };
+  disposers.push(() => document.removeEventListener("selectionchange", refresh));
+  return { refresh, destroy: () => disposers.forEach((d) => d()) };
 }

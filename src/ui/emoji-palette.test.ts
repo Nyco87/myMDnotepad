@@ -24,6 +24,16 @@ describe("emoji data", () => {
   });
 });
 
+describe("emoji code points", () => {
+  const cps = (e: string) => [...e].map((c) => c.codePointAt(0)!.toString(16));
+  it("keeps the variation selectors", () => {
+    expect(cps(EMOJI_GROUPS[0].emojis[1])).toEqual(["2714", "fe0f"]);
+    expect(cps(EMOJI_GROUPS[1].emojis[0])).toEqual(["26a0", "fe0f"]);
+    expect(cps(EMOJI_GROUPS[6].emojis[7])).toEqual(["2764", "fe0f"]);
+    expect(cps(EMOJI_GROUPS[5].emojis[8])).toEqual(["21a9", "fe0f"]);
+  });
+});
+
 describe("pushRecent", () => {
   it("moves an existing emoji to the front without duplicates", () => {
     expect(pushRecent(["✅", "❌"], "❌")).toEqual(["❌", "✅"]);
