@@ -183,6 +183,47 @@ fn follow_note(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String> 
     res
 }
 
+/// Après le déplacement du dossier `old_rel` vers `new_rel` : dans chaque note du dossier, les liens d'images
+/// relatifs qui visent l'extérieur du dossier sont recalculés (ceux qui restent dedans ont suivi le dossier).
+/// Une note n'est réécrite que si un lien a changé. Continue après un échec et renvoie la première erreur.
+fn follow_folder(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String> {
+    let new_abs = resolve(root, new_rel)?;
+    let old_parts: Vec<String> = old_rel.split('/').filter(|s| !s.is_empty()).map(str::to_lowercase).collect();
+    let mut notes = vec![];
+    collect_md(&new_abs, &mut notes);
+    let mut first_err: Option<String> = None;
+    for n in notes {
+        let note_new = to_rel(root, &n);
+        let Some(inner) = note_new.strip_prefix(new_rel) else { continue };
+        let note_old = format!("{old_rel}{inner}");
+        let (old_dir, _) = split_rel(&note_old);
+        let (new_dir, _) = split_rel(&note_new);
+        let note = match read_note(root, &note_new) {
+            Ok(n) => n,
+            Err(e) => {
+                first_err.get_or_insert(format!("« {note_new} » : {e}"));
+                continue;
+            }
+        };
+        let updated = images::rewrite_image_links(&note.content, |link| {
+            let target = norm_join(old_dir, link)?;
+            let inside = target.len() > old_parts.len()
+                && target.iter().zip(&old_parts).all(|(a, b)| a.to_lowercase() == *b);
+            if inside {
+                return None;
+            }
+            let nl = rel_between(new_dir, &target);
+            (nl != link).then_some(nl)
+        });
+        if updated != note.content {
+            if let Err(e) = write_note(root, &note_new, &updated, None) {
+                first_err.get_or_insert(e);
+            }
+        }
+    }
+    first_err.map_or(Ok(()), Err)
+}
+
 fn collect_md(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(rd) = fs::read_dir(dir) else { return };
     for e in rd.flatten() {
@@ -280,6 +321,8 @@ pub fn move_entry(root: &Path, rel: &str, dest_dir_rel: &str) -> Result<String, 
     let new_rel = to_rel(root, &dst);
     if src.extension().is_some() && is_md(&dst) && dst.is_file() {
         follow_note(root, rel, &new_rel)?;
+    } else if dst.is_dir() {
+        follow_folder(root, rel, &new_rel)?;
     }
     Ok(new_rel)
 }
@@ -411,6 +454,28 @@ sans image
         move_entry(r, "A", "B").unwrap();
         assert!(r.join("B/A/images/n-1.png").is_file());
         assert_eq!(fs::read_to_string(r.join("B/A/n.md")).unwrap(), "![](images/n-1.png)");
+    }
+    #[test] fn move_folder_rewrites_links_pointing_outside() {
+        let d = tempdir().unwrap(); let r = d.path();
+        md_with(r, "shared/s.png", "s");
+        md_with(r, "A/images/n-1.png", "img");
+        md_with(r, "A/sub/x.png", "x");
+        md_with(r, "A/n.md", "![](../shared/s.png)\n![](images/n-1.png)\n![](sub/x.png)\n![](https://a.b/c.png)\n");
+        md_with(r, "A/sub/deep.md", "![](../../shared/s.png) ![](x.png)\n");
+        md_with(r, "A/plain.md", "rien\n");
+        fs::create_dir(r.join("B")).unwrap();
+        let plain_before = fs::metadata(r.join("A/plain.md")).unwrap().modified().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        move_entry(r, "A", "B").unwrap();
+        assert_eq!(
+            fs::read_to_string(r.join("B/A/n.md")).unwrap(),
+            "![](../../shared/s.png)\n![](images/n-1.png)\n![](sub/x.png)\n![](https://a.b/c.png)\n"
+        );
+        assert_eq!(fs::read_to_string(r.join("B/A/sub/deep.md")).unwrap(), "![](../../../shared/s.png) ![](x.png)\n");
+        assert_eq!(fs::metadata(r.join("B/A/plain.md")).unwrap().modified().unwrap(), plain_before);
+        // Retour à la racine : les liens redeviennent ceux d'origine.
+        move_entry(r, "B/A", "").unwrap();
+        assert_eq!(fs::read_to_string(r.join("A/sub/deep.md")).unwrap(), "![](../../shared/s.png) ![](x.png)\n");
     }
     #[test] fn rename_note_with_spaces_slugs_images() {
         let d = tempdir().unwrap(); let r = d.path();
