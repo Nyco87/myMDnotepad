@@ -4,6 +4,7 @@ import type Token from "markdown-it/lib/token.mjs";
 import taskLists from "markdown-it-task-lists";
 import { MarkdownParser } from "prosemirror-markdown";
 import { Fragment, type Node } from "prosemirror-model";
+import { alertKindOf } from "./alert-kinds";
 import { markPlugin } from "./mark-plugin";
 import { normalizeSource, rawPlugin, scanRaw } from "./raw";
 import { schema } from "./schema";
@@ -127,9 +128,42 @@ function cellAlign(tok: Token): string | null {
   return m ? m[1] : null;
 }
 
+/**
+ * A blockquote whose first paragraph starts with `[!KIND]` (a GitHub alert kind, any case) becomes an
+ * `alert_open` / `alert_close` pair. The marker is removed from the content; text after it on the same line
+ * stays as the first paragraph (`inline`). An unknown kind, or text glued to the marker, leaves the quote alone.
+ */
+function alertTokens(state: StateCore): void {
+  const tokens = state.tokens;
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i].type !== "blockquote_open") continue;
+    const open = tokens[i + 1];
+    const inline = tokens[i + 2];
+    if (open?.type !== "paragraph_open" || inline?.type !== "inline") continue;
+    const m = /^(\[!([A-Za-z]+)\])(?=[ \t]|$|\n)/.exec(inline.content);
+    const kind = m ? alertKindOf(m[2]) : null;
+    const children = inline.children;
+    const first = children?.[0];
+    if (!m || !kind || !children || first?.type !== "text" || !first.content.startsWith(m[1])) continue;
+
+    const sameLine = /^[ \t]+\S/.test(inline.content.slice(m[1].length));
+    first.content = first.content.slice(m[1].length);
+    if (sameLine) first.content = first.content.replace(/^[ \t]+/, "");
+    if (!sameLine || first.content === "") children.shift();
+    if (!sameLine && (children[0]?.type === "softbreak" || children[0]?.type === "hardbreak")) children.shift();
+
+    const close = closeIndex(tokens, i);
+    tokens[i].type = "alert_open";
+    tokens[i].meta = { kind, marker: m[1], inline: sameLine };
+    tokens[close].type = "alert_close";
+    if (children.length === 0) tokens.splice(i + 1, 3); // the marker was alone in its paragraph
+  }
+}
+
 export const markdownIt = MarkdownIt("commonmark").enable(["strikethrough", "table"]).use(taskLists).use(rawPlugin).use(markPlugin);
 markdownIt.core.ruler.after("github-task-lists", "mdnote-task-tokens", taskTokens);
 markdownIt.core.ruler.push("mdnote-cell-paragraphs", cellParagraphs);
+markdownIt.core.ruler.push("mdnote-alerts", alertTokens);
 // Keep link/image destinations as written (after backslash unescaping) instead
 // of markdown-it's percent-encoded form: the file must not change on save
 // ("images/schéma.png" stays readable) and `<https://x.y/é>` stays an autolink.
@@ -142,6 +176,10 @@ export const parserTokens: ConstructorParameters<typeof MarkdownParser>[2] = {
   paragraph: { block: "paragraph" },
   heading: { block: "heading", getAttrs: (tok) => ({ level: Number(tok.tag.slice(1)) }) },
   blockquote: { block: "blockquote" },
+  alert: {
+    block: "alert",
+    getAttrs: (tok) => ({ kind: tok.meta.kind, marker: tok.meta.marker, inline: tok.meta.inline }),
+  },
   code_block: { block: "code_block", noCloseToken: true },
   fence: { block: "code_block", getAttrs: (tok) => ({ language: tok.info.trim() }), noCloseToken: true },
   hr: { node: "horizontal_rule" },

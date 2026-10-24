@@ -1,5 +1,6 @@
 import { MarkdownSerializer, type MarkdownSerializerState } from "prosemirror-markdown";
 import type { Mark, Node } from "prosemirror-model";
+import { alertKindOf, canonicalMarker, type AlertKind } from "./alert-kinds";
 import { formatTable, type Align } from "./table-format";
 
 type NodeRule = (state: MarkdownSerializerState, node: Node, parent: Node, index: number) => void;
@@ -55,6 +56,19 @@ function escapeHighlight(text: string): string {
   });
 }
 
+/** First paragraphs of the blockquotes being written (see `keepQuoteMarker`). */
+const quoteStarts = new WeakSet<Node>();
+
+/**
+ * `[!FOO]` opening a quote's paragraph is not an alert: write it as typed (the escaped `\[!FOO\]` would not be
+ * byte-identical). A known kind (`[!NOTE]`) stays escaped, otherwise the next load would turn the quote into an alert.
+ */
+function keepQuoteMarker(escaped: string, raw: string): string {
+  const m = /^\[!([A-Za-z]+)\](?=\s|$)/.exec(raw);
+  if (!m || alertKindOf(m[1])) return escaped;
+  return escaped.replace(/^\\\[!([A-Za-z]+)\\\]/, "[!$1]");
+}
+
 function isBreak(node: Node | null | undefined): boolean {
   return node?.type.name === "hard_break";
 }
@@ -68,6 +82,9 @@ function destination(url: string): string {
 function titlePart(title: string | null): string {
   return title ? ' "' + title.replace(/"/g, '\\"') + '"' : "";
 }
+
+/** Blocks that can follow an alert marker on the next line without a blank line. */
+const BREAKS_PARAGRAPH = new Set(["bullet_list", "ordered_list", "task_list", "code_block", "blockquote", "alert", "heading", "horizontal_rule"]);
 
 const BULLETISH = new Set(["bullet_list", "task_list"]);
 
@@ -170,7 +187,34 @@ const nodes: Record<string, NodeRule> = {
   },
 
   blockquote(state, node) {
+    if (node.firstChild) quoteStarts.add(node.firstChild);
     state.wrapBlock("> ", null, node, () => state.renderContent(node));
+  },
+
+  alert(state, node) {
+    const s = state as State;
+    const kind = node.attrs.kind as AlertKind;
+    const marker: string = node.attrs.marker ?? canonicalMarker(kind);
+    state.wrapBlock("> ", null, node, () => {
+      state.text(marker, false);
+      const first = node.firstChild!;
+      const empty = node.childCount === 1 && first.type.name === "paragraph" && first.content.size === 0;
+      if (empty) return;
+      if (node.attrs.inline && node.attrs.marker !== null && first.type.name === "paragraph") {
+        // Text that followed the marker on its line stays there.
+        s.out += " ";
+        state.renderInline(first, false);
+        state.closeBlock(first);
+        node.forEach((child, _o, i) => {
+          if (i > 0) state.render(child, node, i);
+        });
+        return;
+      }
+      // The first block follows the marker line directly, except blocks that cannot interrupt a paragraph.
+      if (first.type.name === "paragraph" || BREAKS_PARAGRAPH.has(first.type.name)) state.ensureNewLine();
+      else state.closeBlock(first);
+      state.renderContent(node);
+    });
   },
 
   code_block(state, node) {
@@ -273,6 +317,7 @@ const nodes: Record<string, NodeRule> = {
     const afterBreak = isBreak(parent.maybeChild(index - 1)) && parent.type.name !== "heading";
     const lineStart = afterBreak || s.atBlockStart;
     let out = escapeHighlight(escapeInline(state.esc(noNul(node.text!), lineStart)));
+    if (index === 0 && quoteStarts.has(parent)) out = keepQuoteMarker(out, node.text!);
     if (lineStart) out = escapeLineStart(out, afterBreak);
     state.text(out, false);
   },

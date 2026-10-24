@@ -35,6 +35,24 @@ export const nodes: Record<string, NodeSpec> = {
     toDOM: () => ["blockquote", 0],
   },
 
+  /**
+   * GitHub alert (`> [!NOTE]` …). `marker` keeps the original marker text (`[!note]`) so an untouched alert is written back
+   * as it was; null once the kind was changed or for a new alert. `inline` is true when text followed the marker on its line.
+   */
+  alert: {
+    attrs: { kind: { default: "note" }, marker: { default: null }, inline: { default: false } },
+    content: "block+",
+    group: "block",
+    defining: true,
+    parseDOM: [
+      {
+        tag: "div[data-alert]",
+        getAttrs: (dom) => ({ kind: (dom as HTMLElement).getAttribute("data-alert") || "note" }),
+      },
+    ],
+    toDOM: (node) => ["div", { "data-alert": node.attrs.kind, class: `alert alert-${node.attrs.kind}` }, 0],
+  },
+
   code_block: {
     attrs: { language: { default: "" } },
     content: "text*",

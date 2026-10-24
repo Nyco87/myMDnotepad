@@ -25,9 +25,11 @@ describe("editor", () => {
     mount.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
     expect(ed.view.state.selection.from).toBe(ed.view.state.doc.content.size - 1);
     expect(ed.view.hasFocus()).toBe(true);
-    // Un clic dans le texte n'est pas détourné.
+    // Un clic sur un autre élément du conteneur n'est pas détourné.
     ed.view.dispatch(ed.view.state.tr.setSelection(TextSelection.create(ed.view.state.doc, 1)));
-    ed.view.dom.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    const other = document.createElement("div");
+    mount.appendChild(other);
+    other.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
     expect(ed.view.state.selection.from).toBe(1);
     ed.destroy();
     mount.remove();

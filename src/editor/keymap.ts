@@ -112,13 +112,13 @@ const enterInCodeBlock: Command = (state, dispatch) => {
   return true;
 };
 
-/** Enter in a paragraph directly inside a blockquote inserts a hard_break (stays in the quote). */
+/** Enter in a paragraph directly inside a blockquote or an alert inserts a hard_break (stays in the block). */
 const enterInBlockquote: Command = (state, dispatch) => {
   const { $from } = state.selection;
-  const { paragraph, blockquote, hard_break } = state.schema.nodes;
-  if ($from.parent.type !== paragraph || $from.depth < 1 || $from.node($from.depth - 1).type !== blockquote) {
-    return false;
-  }
+  const { paragraph, blockquote, alert, hard_break } = state.schema.nodes;
+  if ($from.parent.type !== paragraph || $from.depth < 1) return false;
+  const container = $from.node($from.depth - 1).type;
+  if (container !== blockquote && container !== alert) return false;
   if (dispatch) dispatch(state.tr.replaceSelectionWith(hard_break.create()).scrollIntoView());
   return true;
 };
@@ -142,7 +142,7 @@ let warnedLayout = false;
 const arrowDownLeavesBlock: Command = (state, dispatch, view) => {
   const { $from, empty } = state.selection;
   if (!empty || !$from.parent.isTextblock) return false;
-  const { blockquote, paragraph } = state.schema.nodes;
+  const { blockquote, alert, paragraph } = state.schema.nodes;
 
   let stickyDepth = -1;
   if ($from.parent.type.spec.code) {
@@ -150,7 +150,7 @@ const arrowDownLeavesBlock: Command = (state, dispatch, view) => {
     stickyDepth = $from.depth;
   } else {
     for (let d = $from.depth - 1; d >= 1; d--) {
-      if ($from.node(d).type === blockquote) {
+      if ($from.node(d).type === blockquote || $from.node(d).type === alert) {
         stickyDepth = d;
         break;
       }

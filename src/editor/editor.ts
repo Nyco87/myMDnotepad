@@ -14,6 +14,7 @@ import { buildKeymap } from "./keymap";
 import { tableControlsPlugin } from "./tables";
 import { imageNodeView, imagePastePlugin } from "./images";
 import { taskItemView } from "./task-item";
+import { alertView } from "./alerts";
 import { parseMarkdown } from "../markdown/parse";
 import { serializeMarkdown } from "../markdown/serialize";
 
@@ -57,7 +58,7 @@ function buildPlugins(schema: Schema, opts: EditorOptions): Plugin[] {
 
 /** Node views registered in one place. */
 function buildNodeViews(opts: EditorOptions): Record<string, NodeViewConstructor> {
-  return { image: imageNodeView(() => opts.noteRel), task_item: taskItemView };
+  return { image: imageNodeView(() => opts.noteRel), task_item: taskItemView, alert: alertView };
 }
 
 export function createEditor(mount: HTMLElement, opts: EditorOptions): EditorHandle {
@@ -73,7 +74,7 @@ export function createEditor(mount: HTMLElement, opts: EditorOptions): EditorHan
     if (e.target !== mount) return;
     e.preventDefault();
     view.focus();
-    view.dispatch(view.state.tr.setSelection(Selection.atEnd(view.state.doc)).scrollIntoView());
+    view.dispatch(view.state.tr.setSelection(Selection.atEnd(view.state.doc)));
   };
   mount.addEventListener("mousedown", onPaneMouseDown);
 

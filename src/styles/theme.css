@@ -135,6 +135,21 @@ body {
 }
 .ProseMirror-gapcursor:after { border-top: 1px solid var(--text); }
 
+/* ---- GitHub alerts ---- */
+.ProseMirror .alert { border-left: 4px solid var(--alert-color); border-radius: 8px; padding: 10px 14px; margin: 0.8em 0; background: var(--alert-bg); }
+.ProseMirror .alert-title {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-weight: 600; color: var(--alert-color);
+  cursor: pointer; user-select: none; width: fit-content;
+}
+.ProseMirror .alert-title:hover { filter: brightness(1.15); }
+.ProseMirror .alert-body > :first-child { margin-top: 0; }
+.ProseMirror .alert-body > :last-child { margin-bottom: 0; }
+.ProseMirror .alert-note { --alert-color: #4493f8; --alert-bg: #4493f814; }
+.ProseMirror .alert-tip { --alert-color: #3fb950; --alert-bg: #3fb95014; }
+.ProseMirror .alert-important { --alert-color: #ab7df8; --alert-bg: #ab7df814; }
+.ProseMirror .alert-warning { --alert-color: #d29922; --alert-bg: #d2992214; }
+.ProseMirror .alert-caution { --alert-color: #f85149; --alert-bg: #f8514914; }
+
 /* ---- Table assistant ---- */
 #app { position: relative; }
 .tbl-add {
