@@ -1,0 +1,22 @@
+:root {
+  --accent: #60cdff;
+  --panel: rgba(32, 32, 32, 0.72);
+  --editor-bg: rgba(28, 28, 28, 0.96);
+  --text: #e6e6e6;
+  --border: #3a3a3a;
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  color: var(--text);
+}
+
+html,
+body {
+  background: transparent;
+  margin: 0;
+  height: 100%;
+}
+
+#app {
+  height: 100%;
+  background: var(--panel);
+}
