@@ -1,5 +1,6 @@
 import { MarkdownSerializer, type MarkdownSerializerState } from "prosemirror-markdown";
 import type { Mark, Node } from "prosemirror-model";
+import { formatTable, type Align } from "./table-format";
 
 type NodeRule = (state: MarkdownSerializerState, node: Node, parent: Node, index: number) => void;
 type MarkRule = ConstructorParameters<typeof MarkdownSerializer>[1][string];
@@ -81,12 +82,48 @@ function trimEmptyItem(state: State, node: Node): void {
     state.out = state.out.replace(/ +$/, "");
 }
 
+/**
+ * In a tight list the blocks of one item follow each other without a blank
+ * line ("- a" then "  ```"); a blank line there would make the list loose on re-parse.
+ */
+function itemContent(state: State, node: Node, parent: Node): void {
+  if (!parent.attrs.tight) return state.renderContent(node);
+  node.forEach((child, _offset, i) => {
+    if (i) state.flushClose(1);
+    state.render(child, node, i);
+  });
+}
+
 /** Same rule as prosemirror-markdown's `isPlainURL`: link text equals its URL → `<url>`. */
 function isAutolink(mark: Mark, parent: Node, index: number): boolean {
   if (mark.attrs.title || !/^\w+:/.test(mark.attrs.href)) return false;
   const content = parent.child(index);
   if (!content.isText || content.text !== mark.attrs.href || content.marks[content.marks.length - 1] !== mark) return false;
   return index === parent.childCount - 1 || !mark.isInSet(parent.child(index + 1).marks);
+}
+
+/**
+ * Raw sources are written as placeholders (one per line, so blank lines and
+ * fence-like lines inside them are invisible to `tidy`) and put back at the
+ * very end. Only the serializer emits U+0000: markdown-it turns it into U+FFFD.
+ */
+let rawStore: string[] = [];
+const PLACEHOLDER = /([ \t]*)\u0000(\d+)\u0000/g;
+
+function placeholder(source: string): string {
+  rawStore.push(source);
+  return `\u0000${rawStore.length - 1}\u0000`;
+}
+
+/** Puts raw sources back. An empty raw line also drops the block prefix's trailing spaces ("> "). */
+function expandRaw(md: string): string {
+  return md.replace(PLACEHOLDER, (_m, ws: string, n: string) => (rawStore[Number(n)] === "" ? "" : ws + rawStore[Number(n)]));
+}
+
+/** Inline markdown of one table cell, on a single line. */
+function cellMarkdown(cell: Node): string {
+  const md = serializer.serialize(cell.type.schema.topNodeType.create(null, cell.content));
+  return expandRaw(md).trim().replace(/\n+/g, "<br>");
 }
 
 const nodes: Record<string, NodeRule> = {
@@ -137,8 +174,8 @@ const nodes: Record<string, NodeRule> = {
     list(state as State, node, " ".repeat(first.length), (i) => (i === 0 ? first : `1${sep} `));
   },
 
-  list_item(state, node) {
-    state.renderContent(node);
+  list_item(state, node, parent) {
+    itemContent(state as State, node, parent);
     trimEmptyItem(state as State, node);
   },
 
@@ -147,9 +184,31 @@ const nodes: Record<string, NodeRule> = {
     list(state as State, node, "  ", (i) => (node.child(i).attrs.checked ? `${bullet} [x] ` : `${bullet} [ ] `));
   },
 
-  task_item(state, node) {
-    state.renderContent(node);
+  task_item(state, node, parent) {
+    itemContent(state as State, node, parent);
     trimEmptyItem(state as State, node);
+  },
+
+  raw_block(state, node) {
+    state.text(node.attrs.source.split("\n").map(placeholder).join("\n"), false);
+    state.closeBlock(node);
+  },
+
+  raw_inline(state, node) {
+    state.text(placeholder(node.attrs.source), false);
+  },
+
+  table(state, node) {
+    const rows: string[][] = [];
+    node.forEach((row) => {
+      const cells: string[] = [];
+      row.forEach((cell) => cells.push(cellMarkdown(cell)));
+      rows.push(cells);
+    });
+    const align: (Align | null)[] = [];
+    node.firstChild?.forEach((cell) => align.push(cell.attrs.align ?? null));
+    state.text(formatTable(rows, align), false);
+    state.closeBlock(node);
   },
 
   image(state, node) {
@@ -256,5 +315,10 @@ function tidy(md: string): string {
 }
 
 export function serializeMarkdown(doc: Node): string {
-  return tidy(serializer.serialize(doc));
+  rawStore = [];
+  try {
+    return expandRaw(tidy(serializer.serialize(doc)));
+  } finally {
+    rawStore = [];
+  }
 }

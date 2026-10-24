@@ -4,6 +4,7 @@ import type Token from "markdown-it/lib/token.mjs";
 import taskLists from "markdown-it-task-lists";
 import { MarkdownParser } from "prosemirror-markdown";
 import { Fragment, type Node } from "prosemirror-model";
+import { normalizeSource, rawPlugin, scanRaw } from "./raw";
 import { schema } from "./schema";
 
 /**
@@ -105,8 +106,29 @@ function markEmptyTasks(state: StateCore): void {
   }
 }
 
-export const markdownIt = MarkdownIt("commonmark").enable("strikethrough").use(taskLists);
+/**
+ * prosemirror-tables cells hold a paragraph; markdown-it puts the cell's
+ * inline token directly in `th`/`td`. Wrap it.
+ */
+function cellParagraphs(state: StateCore): void {
+  const out: Token[] = [];
+  for (const token of state.tokens) {
+    const prev = out[out.length - 1];
+    if (token.type === "inline" && (prev?.type === "th_open" || prev?.type === "td_open")) {
+      out.push(new state.Token("paragraph_open", "p", 1), token, new state.Token("paragraph_close", "p", -1));
+    } else out.push(token);
+  }
+  state.tokens = out;
+}
+
+function cellAlign(tok: Token): string | null {
+  const m = /text-align:\s*(left|center|right)/.exec(tok.attrGet("style") ?? "");
+  return m ? m[1] : null;
+}
+
+export const markdownIt = MarkdownIt("commonmark").enable(["strikethrough", "table"]).use(taskLists).use(rawPlugin);
 markdownIt.core.ruler.after("github-task-lists", "mdnote-task-tokens", taskTokens);
+markdownIt.core.ruler.push("mdnote-cell-paragraphs", cellParagraphs);
 // Keep link/image destinations as written (after backslash unescaping) instead
 // of markdown-it's percent-encoded form: the file must not change on save
 // ("images/schéma.png" stays readable) and `<https://x.y/é>` stays an autolink.
@@ -114,10 +136,7 @@ markdownIt.core.ruler.after("github-task-lists", "mdnote-task-tokens", taskToken
 markdownIt.normalizeLink = (url) => url;
 markdownIt.normalizeLinkText = (url) => url;
 
-/**
- * Token → schema mapping. Task 6 adds table and raw (html, front matter…)
- * handlers here.
- */
+/** Token → schema mapping. */
 export const parserTokens: ConstructorParameters<typeof MarkdownParser>[2] = {
   paragraph: { block: "paragraph" },
   heading: { block: "heading", getAttrs: (tok) => ({ level: Number(tok.tag.slice(1)) }) },
@@ -149,6 +168,15 @@ export const parserTokens: ConstructorParameters<typeof MarkdownParser>[2] = {
   s: { mark: "strike" },
   link: { mark: "link", getAttrs: (tok) => ({ href: tok.attrGet("href"), title: tok.attrGet("title") || null }) },
   code_inline: { mark: "code", noCloseToken: true },
+  table: { block: "table" },
+  thead: { ignore: true },
+  tbody: { ignore: true },
+  tr: { block: "table_row" },
+  th: { block: "table_header", getAttrs: (tok) => ({ align: cellAlign(tok) }) },
+  td: { block: "table_cell", getAttrs: (tok) => ({ align: cellAlign(tok) }) },
+  raw_block: { node: "raw_block", getAttrs: (tok) => ({ source: tok.content }) },
+  html_block: { node: "raw_block", getAttrs: (tok) => ({ source: tok.content.replace(/\n$/, "") }) },
+  html_inline: { node: "raw_inline", getAttrs: (tok) => ({ source: tok.content }) },
 };
 
 const parser = new MarkdownParser(schema, markdownIt, parserTokens);
@@ -181,5 +209,6 @@ function mergeTightLists(node: Node): Node {
 }
 
 export function parseMarkdown(md: string): Node {
-  return mergeTightLists(parser.parse(md));
+  const src = normalizeSource(md);
+  return mergeTightLists(parser.parse(src, { mdnoteRaw: scanRaw(src) }));
 }

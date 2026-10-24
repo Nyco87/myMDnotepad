@@ -15,7 +15,8 @@
     "markdown-it": "^14.3.3",
     "markdown-it-task-lists": "^2.1.1",
     "prosemirror-markdown": "^1.13.9",
-    "prosemirror-model": "^1.25.12"
+    "prosemirror-model": "^1.25.12",
+    "prosemirror-tables": "^1.8.5"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

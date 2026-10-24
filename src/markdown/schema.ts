@@ -1,12 +1,12 @@
 import { Schema, type NodeSpec, type MarkSpec } from "prosemirror-model";
+import { tableNodes } from "prosemirror-tables";
 
 /**
  * Document schema shared by the editor, the markdown parser and the serializer.
  *
  * Node/mark names match the markdown-it token names where possible so the
- * parser table in `parse.ts` stays a plain mapping. Task 6 adds `table*`,
- * `raw_block` (group "block") and `raw_inline` (group "inline") by extending
- * `nodes` below; `doc` must remain the first entry (it is the top node).
+ * parser table in `parse.ts` stays a plain mapping. `doc` must remain the
+ * first entry (it is the top node).
  */
 export const nodes: Record<string, NodeSpec> = {
   doc: { content: "block+" },
@@ -140,6 +140,61 @@ export const nodes: Record<string, NodeSpec> = {
     parseDOM: [{ tag: "br" }],
     toDOM: () => ["br"],
   },
+
+  /**
+   * Markdown the editor does not model (HTML blocks, front matter, math,
+   * footnotes, reference definitions…): kept as its exact source lines and
+   * written back unchanged. Not editable as rich text.
+   */
+  raw_block: {
+    attrs: { source: { default: "" } },
+    group: "block",
+    atom: true,
+    selectable: true,
+    parseDOM: [
+      {
+        tag: "pre[data-type=raw_block]",
+        priority: 60,
+        preserveWhitespace: "full",
+        getAttrs: (dom) => ({ source: (dom as HTMLElement).textContent ?? "" }),
+      },
+    ],
+    toDOM: (node) => ["pre", { "data-type": "raw_block", class: "raw-block" }, node.attrs.source],
+  },
+
+  /** Inline HTML tag (`<kbd>`, `</kbd>`, `<br>`…), written back unchanged. */
+  raw_inline: {
+    attrs: { source: { default: "" } },
+    inline: true,
+    group: "inline",
+    atom: true,
+    parseDOM: [
+      {
+        tag: "span[data-type=raw_inline]",
+        getAttrs: (dom) => ({ source: (dom as HTMLElement).textContent ?? "" }),
+      },
+    ],
+    toDOM: (node) => ["span", { "data-type": "raw_inline", class: "raw-inline" }, node.attrs.source],
+  },
+
+  // GFM tables (prosemirror-tables compatible). A cell holds exactly one
+  // paragraph: a GFM cell is a single line of inline content.
+  ...tableNodes({
+    tableGroup: "block",
+    cellContent: "paragraph",
+    cellAttributes: {
+      align: {
+        default: null,
+        getFromDOM: (dom) => {
+          const value = (dom as HTMLElement).style.textAlign;
+          return value === "left" || value === "center" || value === "right" ? value : null;
+        },
+        setDOMAttr: (value, attrs) => {
+          if (value) attrs.style = ((attrs.style as string) || "") + `text-align: ${value};`;
+        },
+      },
+    },
+  }),
 };
 
 // Order matters: it is the nesting order of marks in the serialized output.
