@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 // @ts-expect-error type error without @types/node package
 import process from "node:process";
@@ -10,6 +11,10 @@ export default defineConfig(() => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
+  // Unit tests run in Node by default; DOM tests opt in with `// @vitest-environment jsdom`.
+  test: {
+    environment: "node",
+  },
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,
