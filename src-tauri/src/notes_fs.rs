@@ -91,9 +91,18 @@ pub fn list_tree(root: &Path) -> Result<TreeNode, String> {
     Ok(build(root, root, name))
 }
 
+/// Erreur renvoyée par `read_note` quand le fichier n'existe pas (ou plus).
+pub const NOT_FOUND: &str = "NOT_FOUND";
+
 pub fn read_note(root: &Path, rel: &str) -> Result<NoteFile, String> {
     let p = resolve(root, rel)?;
-    let bytes = fs::read(&p).map_err(|e| format!("Impossible de lire la note : {e}"))?;
+    let bytes = fs::read(&p).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            NOT_FOUND.to_string()
+        } else {
+            format!("Impossible de lire la note : {e}")
+        }
+    })?;
     let body = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes);
     // Pas de conversion « lossy » : un fichier Latin-1 ouvert puis enregistré serait abîmé (caractères remplacés par �).
     let text = std::str::from_utf8(body)
@@ -141,6 +150,10 @@ mod tests {
         let names: Vec<_> = kids.iter().map(|c| c.name.as_str()).collect();
         assert_eq!(names, ["Dossier", "Vide", "A", "b"]);
         assert_eq!(kids[0].children.as_ref().unwrap()[0].path, "Dossier/n.md");
+    }
+    #[test] fn read_note_missing_is_not_found() {
+        let d = tempdir().unwrap();
+        assert_eq!(read_note(d.path(), "absent.md").unwrap_err(), "NOT_FOUND");
     }
     #[test] fn read_note_normalizes_crlf_and_bom() {
         let d = tempdir().unwrap();

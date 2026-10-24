@@ -51,6 +51,10 @@ export interface TabsController {
   activeEditor(): EditorHandle | null;
   /** Le fichier de l'onglet a disparu du disque (changement externe). */
   isMissing(rel: string): boolean;
+  /** Le fichier existe mais ne peut pas être relu (ex. pas en UTF-8) : les enregistrements sont suspendus. */
+  isUnreadable(rel: string): boolean;
+  /** Relit une note illisible (bouton « Réessayer ») ; rétablit l'enregistrement si elle est de nouveau lisible. */
+  retryRead(rel: string): Promise<void>;
   /** À appeler sur `fs-changed` : recharge, ignore l'écho de nos écritures ou crée une copie de conflit. */
   externalChange(paths: string[]): Promise<void>;
   /**
@@ -76,6 +80,10 @@ interface Tab {
   /** Contenu en cours d'écriture (pour reconnaître l'écho reçu avant la fin de l'écriture). */
   writing: string | null;
   missing: boolean;
+  /** Raison pour laquelle le fichier ne peut pas être relu ; tant qu'elle est définie, rien n'est écrit. */
+  unreadable: string | null;
+  /** Bandeau « note illisible » au-dessus de l'éditeur. */
+  banner: HTMLElement;
   closed: boolean;
   /** Vérifications de changement externe sérialisées par onglet. */
   check: Promise<void>;
@@ -92,6 +100,13 @@ interface Tab {
 const pad = (n: number): string => String(n).padStart(2, "0");
 /** Erreur renvoyée par `writeNote` quand le fichier a changé depuis le mtime attendu. */
 export const CONFLICT = "CONFLICT";
+/** Erreur interne de l'écriture tant que la note est illisible (le contenu reste en file). */
+export const UNREADABLE = "UNREADABLE";
+/** Erreur renvoyée par `readNote` quand le fichier n'existe pas. */
+export const NOT_FOUND = "NOT_FOUND";
+
+/** Dernier essai d'écriture refusé par le compare-and-swap : le message est déjà prêt pour l'utilisateur. */
+class ConflictGiveUp extends Error {}
 const errText = (e: unknown): string => (typeof e === "string" ? e : e instanceof Error ? e.message : String(e));
 
 /** Nom d'affichage d'une note : son nom de fichier sans `.md`. */
@@ -108,6 +123,16 @@ export function conflictName(rel: string, at: Date): { dir: string; base: string
 const under = (rel: string, prefix: string): boolean => rel === prefix || rel.startsWith(prefix + "/");
 
 export function createTabs(o: TabsOptions): TabsController {
+  /** Message pour un enregistrement raté ; rien pour une note illisible (le bandeau l'explique déjà). */
+  const saveFailure = (rel: string, e: unknown): string | null => {
+    if (e instanceof ConflictGiveUp) return e.message;
+    if (errText(e) === UNREADABLE || (e instanceof Error && e.message === UNREADABLE)) return null;
+    return `Enregistrement de « ${noteTitle(rel)} » impossible : ${errText(e)}`;
+  };
+  const reportSave = (rel: string, e: unknown): void => {
+    const m = saveFailure(rel, e);
+    if (m) notify(m);
+  };
   const tabs: Tab[] = [];
   const opening = new Map<string, Promise<boolean>>();
   let activeRel: string | null = null;
@@ -120,7 +145,7 @@ export function createTabs(o: TabsOptions): TabsController {
     // En quittant un onglet, on enregistre tout de suite (et on retente une écriture en échec : pas de nouvel essai automatique).
     const prev = activeRel === null || activeRel === rel ? undefined : find(activeRel);
     if (prev?.saver.pending()) {
-      prev.saver.flush().catch((e) => notify(`Enregistrement de « ${noteTitle(prev.rel)} » impossible : ${errText(e)}`));
+      prev.saver.flush().catch((e) => reportSave(prev.rel, e));
     }
     activeRel = rel;
     for (const t of tabs) t.mount.hidden = t.rel !== rel;
@@ -132,13 +157,18 @@ export function createTabs(o: TabsOptions): TabsController {
     try {
       file = await o.io.readNote(rel);
     } catch (e) {
-      if (!quiet) notify(`Impossible d'ouvrir « ${noteTitle(rel)} » : ${errText(e)}`);
+      if (!quiet) notify(`Impossible d'ouvrir « ${noteTitle(rel)} » : ${errText(e) === NOT_FOUND ? "note introuvable" : errText(e)}`);
       return false;
     }
     if (find(rel)) return true;
     const mount = document.createElement("div");
     mount.className = "editor-pane";
     mount.hidden = true;
+    const banner = document.createElement("div");
+    banner.className = "note-banner";
+    banner.setAttribute("role", "alert");
+    banner.hidden = true;
+    mount.appendChild(banner);
     o.host.appendChild(mount);
     const tab = {
       rel,
@@ -147,6 +177,8 @@ export function createTabs(o: TabsOptions): TabsController {
       diskKnown: file.content,
       writing: null,
       missing: false,
+      unreadable: null,
+      banner,
       closed: false,
       check: Promise.resolve(),
       conflicts: [],
@@ -165,10 +197,12 @@ export function createTabs(o: TabsOptions): TabsController {
             if (tab.closed || (tab.locks.size === 0 && tab.conflicts.length === 0)) break;
           }
           if (tab.closed) return tab.lastKnownMtime; // onglet supprimé : ne jamais recréer le fichier
+          // Fichier illisible : on ne sait pas ce qu'il contient, on n'écrase rien (le contenu reste en file).
+          if (tab.unreadable !== null) throw new Error(UNREADABLE);
           tab.writing = md;
           try {
             // Compare-and-swap : refusé si le fichier a changé depuis notre dernière lecture/écriture.
-            const p = o.io.writeNote(tab.rel, md, tab.missing ? undefined : tab.lastKnownMtime);
+            const p = o.io.writeNote(tab.rel, md, tab.lastKnownMtime);
             tab.inflight = p;
             const mtime = await p;
             tab.lastKnownMtime = mtime;
@@ -179,7 +213,12 @@ export function createTabs(o: TabsOptions): TabsController {
             }
             return mtime;
           } catch (e) {
-            if (errText(e) !== CONFLICT || attempt >= 5) throw e;
+            if (errText(e) !== CONFLICT) throw e;
+            if (attempt >= 5) {
+              throw new ConflictGiveUp(
+                `La note « ${noteTitle(tab.rel)} » est modifiée ailleurs en ce moment ; nouvel essai au prochain changement.`,
+              );
+            }
           } finally {
             tab.writing = null;
             tab.inflight = null;
@@ -190,7 +229,7 @@ export function createTabs(o: TabsOptions): TabsController {
         }
       },
       o.autosaveDelayMs ?? 400,
-      (e) => notify(`Enregistrement de « ${noteTitle(tab.rel)} » impossible : ${errText(e)}`),
+      (e) => reportSave(tab.rel, e),
     );
     tab.opts = { markdown: file.content, noteRel: rel, onChange: (md) => tab.saver.schedule(md) };
     tab.editor = o.makeEditor(mount, tab.opts);
@@ -286,22 +325,48 @@ export function createTabs(o: TabsOptions): TabsController {
     else changed();
   };
 
+  /** Affiche (ou retire) le bandeau « note illisible ». */
+  const setUnreadable = (tab: Tab, reason: string | null): void => {
+    if (tab.unreadable === reason) return;
+    tab.unreadable = reason;
+    tab.banner.replaceChildren();
+    tab.banner.hidden = reason === null;
+    if (reason !== null) {
+      const text = document.createElement("span");
+      text.textContent = `Cette note ne peut pas être relue : ${reason} MDnote n'y écrit plus tant qu'elle reste illisible.`;
+      const retry = document.createElement("button");
+      retry.type = "button";
+      retry.textContent = "Réessayer";
+      retry.addEventListener("click", () => void ctl.retryRead(tab.rel));
+      tab.banner.append(text, retry);
+    }
+    changed();
+  };
+
   const checkTab = async (tab: Tab): Promise<void> => {
     if (tab.closed) return;
     const rel = tab.rel;
     let file: NoteFile;
     try {
       file = await o.io.readNote(rel);
-    } catch {
+    } catch (e) {
       if (tab.closed || tab.rel !== rel) return;
-      // Fichier disparu : on garde l'onglet et son contenu, sans recréer le fichier.
-      if (!tab.missing) {
-        tab.missing = true;
-        changed();
+      if (errText(e) === NOT_FOUND) {
+        // Fichier disparu : on garde l'onglet et son contenu, sans recréer le fichier.
+        if (!tab.missing) {
+          tab.missing = true;
+          changed();
+        }
+        setUnreadable(tab, null);
+      } else {
+        // Le fichier est là mais illisible : on suspend les enregistrements pour ne rien écraser.
+        setUnreadable(tab, errText(e));
       }
       return;
     }
     if (tab.closed || tab.rel !== rel) return;
+    const wasUnreadable = tab.unreadable !== null;
+    setUnreadable(tab, null);
     if (tab.missing) {
       tab.missing = false;
       changed();
@@ -310,6 +375,8 @@ export function createTabs(o: TabsOptions): TabsController {
     if (file.content === tab.diskKnown || file.content === tab.writing || file.content === tab.editor.getMarkdown()) {
       tab.lastKnownMtime = file.mtime_ms;
       tab.diskKnown = file.content;
+      // Les frappes mises en file pendant que la note était illisible partent maintenant.
+      if (wasUnreadable && tab.saver.pending()) void tab.saver.flush().catch((e) => reportSave(tab.rel, e));
       return;
     }
     tab.lastKnownMtime = file.mtime_ms;
@@ -424,6 +491,14 @@ export function createTabs(o: TabsOptions): TabsController {
     active: () => activeRel,
     activeEditor: () => (activeRel === null ? null : (find(activeRel)?.editor ?? null)),
     isMissing: (rel) => find(rel)?.missing ?? false,
+    isUnreadable: (rel) => (find(rel)?.unreadable ?? null) !== null,
+
+    async retryRead(rel) {
+      const t = find(rel);
+      if (!t) return;
+      t.check = t.check.then(() => checkTab(t)).catch((e) => notify(errText(e)));
+      await t.check;
+    },
 
     async externalChange(paths) {
       const hit = tabs.filter((t) => paths.some((p) => under(t.rel, p)));

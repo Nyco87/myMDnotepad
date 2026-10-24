@@ -23,16 +23,27 @@ describe("toast", () => {
     expect(shown()).toBeNull();
   });
 
-  it("sticky message stays until clicked, then the queue resumes", () => {
+  it("sticky message stays until clicked and does not hold back the queue", () => {
     const toast = mountToast(document.body);
     toast("Note modifiée hors de MDnote : copie de conflit", { sticky: true });
     toast("autre");
-    vi.advanceTimersByTime(60_000);
-    expect(shown()).toBe("Note modifiée hors de MDnote : copie de conflit");
-    el().click();
     expect(shown()).toBe("autre");
-    vi.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(60_000);
     expect(shown()).toBeNull();
+    const sticky = document.querySelector(".toast-sticky") as HTMLElement;
+    expect(sticky.textContent).toBe("Note modifiée hors de MDnote : copie de conflit");
+    sticky.click();
+    expect(document.querySelector(".toast-sticky")).toBeNull();
+  });
+
+  it("sticky_does_not_block_queue", () => {
+    const toast = mountToast(document.body);
+    toast("conflit", { sticky: true });
+    toast("erreur");
+    const stack = document.querySelector(".toast-stack") as HTMLElement;
+    const visible = [...stack.querySelectorAll<HTMLElement>(".toast")].filter((e) => !e.hidden).map((e) => e.textContent);
+    expect(visible.sort()).toEqual(["conflit", "erreur"]);
+    expect(shown()).toBe("erreur");
   });
 
   it("a sticky message arriving while another is shown is not lost", () => {
@@ -40,12 +51,11 @@ describe("toast", () => {
     toast("erreur");
     toast("conflit", { sticky: true });
     toast("erreur 2");
+    expect(document.querySelector(".toast-sticky")?.textContent).toBe("conflit");
     vi.advanceTimersByTime(5000);
-    expect(shown()).toBe("conflit");
-    vi.advanceTimersByTime(60_000);
-    expect(shown()).toBe("conflit");
-    el().click();
     expect(shown()).toBe("erreur 2");
+    vi.advanceTimersByTime(60_000);
+    expect(document.querySelector(".toast-sticky")?.textContent).toBe("conflit");
   });
 
   it("clicking a normal message shows the next one at once", () => {

@@ -64,7 +64,7 @@ beforeEach(() => {
   io = {
     readNote: vi.fn(async (rel: string) => {
       const f = disk.get(rel);
-      if (!f) throw "Note introuvable";
+      if (!f) throw "NOT_FOUND";
       return { ...f };
     }),
     // Comme le backend : compare-and-swap sur le mtime quand `expected` est fourni et que le fichier existe.
@@ -243,6 +243,91 @@ describe("tabs controller", () => {
     await tabs.flushAll();
     expect(disk.get("a.md")?.content).toBe("recréée");
     expect(tabs.isMissing("a.md")).toBe(false);
+  });
+
+  const NOT_UTF8 = "Cette note n'est pas encodée en UTF-8 : ouverture refusée pour ne pas l'abîmer.";
+
+  it("unreadable_file_suspends_saves_and_never_overwrites", async () => {
+    const tabs = setup();
+    await tabs.open("a.md");
+    const real = io.readNote.getMockImplementation()!;
+    io.readNote.mockImplementation(async () => {
+      throw NOT_UTF8;
+    });
+    await tabs.externalChange(["a.md"]);
+    expect(tabs.isUnreadable("a.md")).toBe(true);
+    editors.get("a.md")!.type("local");
+    await tabs.flushAll().catch(() => {});
+    expect(io.writeNote).not.toHaveBeenCalled();
+    const banner = document.querySelector(".note-banner") as HTMLElement;
+    expect(banner.hidden).toBe(false);
+    expect(banner.textContent).toContain("Réessayer");
+    // Le fichier redevient lisible mais son contenu est différent : copie de conflit, puis écriture CAS.
+    io.readNote.mockImplementation(real);
+    put("a.md", "externe");
+    const mtime = disk.get("a.md")!.mtime_ms;
+    (banner.querySelector("button") as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(disk.get("a.md")!.content).toBe("local"));
+    expect(tabs.isUnreadable("a.md")).toBe(false);
+    expect(banner.hidden).toBe(true);
+    expect([...disk.keys()].some((k) => k.includes("(conflit"))).toBe(true);
+    expect(io.writeNote).toHaveBeenCalledWith("a.md", "local", mtime);
+  });
+
+  it("unreadable_note_is_retried_on_each_fs_change", async () => {
+    const tabs = setup();
+    await tabs.open("a.md");
+    const real = io.readNote.getMockImplementation()!;
+    io.readNote.mockImplementation(async () => {
+      throw NOT_UTF8;
+    });
+    await tabs.externalChange(["a.md"]);
+    expect(tabs.isUnreadable("a.md")).toBe(true);
+    io.readNote.mockImplementation(real);
+    await tabs.externalChange(["a.md"]);
+    expect(tabs.isUnreadable("a.md")).toBe(false);
+  });
+
+  it("missing_only_on_NOT_FOUND", async () => {
+    const tabs = setup();
+    await tabs.open("a.md");
+    await tabs.open("b.md");
+    const real = io.readNote.getMockImplementation()!;
+    io.readNote.mockImplementation(async (rel: string) => {
+      if (rel === "a.md") throw "NOT_FOUND";
+      throw NOT_UTF8;
+    });
+    await tabs.externalChange(["a.md", "b.md"]);
+    expect(tabs.isMissing("a.md")).toBe(true);
+    expect(tabs.isUnreadable("a.md")).toBe(false);
+    expect(tabs.isMissing("b.md")).toBe(false);
+    expect(tabs.isUnreadable("b.md")).toBe(true);
+    io.readNote.mockImplementation(real);
+  });
+
+  it("writes_always_pass_last_known_mtime", async () => {
+    const tabs = setup();
+    await tabs.open("a.md");
+    const mtime = disk.get("a.md")!.mtime_ms;
+    disk.delete("a.md");
+    await tabs.externalChange(["a.md"]);
+    expect(tabs.isMissing("a.md")).toBe(true);
+    editors.get("a.md")!.type("recréée");
+    await tabs.flushAll();
+    expect(io.writeNote).toHaveBeenCalledWith("a.md", "recréée", mtime);
+  });
+
+  it("final_conflict_failure_message_is_french", async () => {
+    const tabs = setup({ delay: 5 });
+    await tabs.open("a.md");
+    io.writeNote.mockImplementation(async () => {
+      throw "CONFLICT";
+    });
+    editors.get("a.md")!.type("x");
+    await vi.waitFor(() => expect(messages.length).toBeGreaterThan(0));
+    expect(messages[0]).toBe("La note « a » est modifiée ailleurs en ce moment ; nouvel essai au prochain changement.");
+    expect(messages.join("")).not.toContain("CONFLICT");
+    expect(io.writeNote).toHaveBeenCalledTimes(6);
   });
 
   it("flushAll_waits_for_pending_saves", async () => {

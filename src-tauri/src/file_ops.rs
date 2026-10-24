@@ -190,6 +190,7 @@ fn follow_note(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String> 
 fn follow_folder(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String> {
     let new_abs = resolve(root, new_rel)?;
     let old_parts: Vec<String> = old_rel.split('/').filter(|s| !s.is_empty()).map(str::to_lowercase).collect();
+    let new_parts: Vec<String> = new_rel.split('/').filter(|s| !s.is_empty()).map(str::to_string).collect();
     let mut notes = vec![];
     collect_md(&new_abs, &mut notes);
     let mut first_err: Option<String> = None;
@@ -211,7 +212,35 @@ fn follow_folder(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String
             let inside = target.len() > old_parts.len()
                 && target.iter().zip(&old_parts).all(|(a, b)| a.to_lowercase() == *b);
             if inside {
-                return None;
+                // Lien resté à l'intérieur du dossier : il a suivi le dossier. Un lien qui en sort puis y revient
+                // par son nom (« ../A/x.png ») suit le renommage (« ../B/x.png »).
+                if !link.split('/').any(|s| s == "..") {
+                    return None;
+                }
+                let renamed_only = old_parts.len() == new_parts.len()
+                    && old_parts[..old_parts.len() - 1].iter().zip(&new_parts).all(|(a, b)| *a == b.to_lowercase());
+                let old_last = &old_parts[old_parts.len() - 1];
+                let new_last = &new_parts[new_parts.len() - 1];
+                if renamed_only {
+                    let mut done = false;
+                    let segs: Vec<String> = link
+                        .split('/')
+                        .map(|s| {
+                            if !done && s != ".." && s != "." && s.to_lowercase() == *old_last {
+                                done = true;
+                                new_last.clone()
+                            } else {
+                                s.to_string()
+                            }
+                        })
+                        .collect();
+                    let nl = segs.join("/");
+                    return (nl != link).then_some(nl);
+                }
+                let mapped: Vec<String> =
+                    new_parts.iter().cloned().chain(target[old_parts.len()..].iter().cloned()).collect();
+                let nl = rel_between(new_dir, &mapped);
+                return (nl != link).then_some(nl);
             }
             let nl = rel_between(new_dir, &target);
             (nl != link).then_some(nl)
@@ -302,6 +331,9 @@ pub fn rename_entry(root: &Path, rel: &str, new_name: &str) -> Result<Moved, Str
             let warning = links_warning(follow_note(root, rel, &to_rel(root, &dst)));
             return Ok(Moved { rel: to_rel(root, &dst), warning });
         }
+        // Dossier : les liens d'images qui sortent du dossier (ou y reviennent par son ancien nom) sont recalculés.
+        let warning = links_warning(follow_folder(root, rel, &to_rel(root, &dst)));
+        return Ok(Moved { rel: to_rel(root, &dst), warning });
     }
     Ok(Moved { rel: to_rel(root, &dst), warning: None })
 }
@@ -495,6 +527,18 @@ sans image
         // Retour à la racine : les liens redeviennent ceux d'origine.
         move_entry(r, "B/A", "").unwrap();
         assert_eq!(fs::read_to_string(r.join("A/sub/deep.md")).unwrap(), "![](../../shared/s.png) ![](x.png)\n");
+    }
+    #[test] fn rename_folder_rewrites_links_pointing_outside() {
+        let d = tempdir().unwrap(); let r = d.path();
+        md_with(r, "shared/s.png", "s");
+        md_with(r, "A/n.md", "![](../shared/s.png)");
+        rename_entry(r, "A", "B").unwrap();
+        assert_eq!(fs::read_to_string(r.join("B/n.md")).unwrap(), "![](../shared/s.png)");
+        let d = tempdir().unwrap(); let r = d.path();
+        md_with(r, "A/x.png", "x");
+        md_with(r, "A/n.md", "![](../A/x.png)");
+        rename_entry(r, "A", "B").unwrap();
+        assert_eq!(fs::read_to_string(r.join("B/n.md")).unwrap(), "![](../B/x.png)");
     }
     #[test] fn rename_and_move_succeed_with_warning_when_links_cannot_follow() {
         // Note illisible (Latin-1) : le renommage a lieu, la mise à jour des liens échoue → Ok + avertissement.

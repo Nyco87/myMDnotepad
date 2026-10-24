@@ -387,9 +387,26 @@ body {
 .win-btn:hover { background: rgba(255, 255, 255, 0.08); }
 .win-close:hover { background: #c42b1c; color: #fff; }
 
+/* ---- Bandeau « note illisible » ---- */
+.note-banner {
+  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 8px 14px;
+  background: #3a2f1c; border-bottom: 1px solid #e8a33d; color: #f3d9a4; font-size: 12px;
+}
+.note-banner[hidden] { display: none; }
+.note-banner button {
+  flex: none; padding: 4px 12px; border: 1px solid #e8a33d; border-radius: 4px; background: transparent;
+  color: inherit; font: inherit; cursor: pointer;
+}
+.note-banner button:hover { background: rgba(232, 163, 61, 0.2); }
+
 /* ---- Toast (errors, conflicts) ---- */
-.toast {
+.toast-stack {
   position: fixed; right: 16px; bottom: 16px; z-index: 3000; max-width: 380px;
+  display: flex; flex-direction: column-reverse; gap: 8px; pointer-events: none;
+}
+.toast { pointer-events: auto; }
+.toast {
+  max-width: 380px;
   padding: 10px 14px; background: #2b2b2b; border: 1px solid var(--border); border-left: 3px solid var(--accent);
   border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); color: var(--text); font-size: 12px; line-height: 1.4;
 }
