@@ -52,8 +52,26 @@ pub fn rewrite_image_links(content: &str, f: impl Fn(&str) -> Option<String>) ->
     out
 }
 
+/// Préfixe des noms d'images : le nom de la note, chaque suite d'espaces devenant « - ».
+pub fn slug(stem: &str) -> String {
+    let mut out = String::with_capacity(stem.len());
+    let mut in_ws = false;
+    for c in stem.chars() {
+        if c.is_whitespace() {
+            if !in_ws {
+                out.push('-');
+            }
+            in_ws = true;
+        } else {
+            out.push(c);
+            in_ws = false;
+        }
+    }
+    out
+}
+
 pub fn owned_images(note_stem: &str, links: &[String]) -> Vec<String> {
-    let prefix = format!("images/{note_stem}-");
+    let prefix = format!("images/{}-", slug(note_stem));
     links.iter().filter(|l| l.starts_with(&prefix)).cloned().collect()
 }
 
@@ -95,7 +113,7 @@ fn store(root: &Path, note_rel: &str, ext: &str, date: &str, mut write: impl FnM
     let images = resolve(root, dir_rel)?.join("images");
     fs::create_dir_all(&images).map_err(|e| format!("Impossible de créer le dossier des images : {e}"))?;
     for n in 1u32.. {
-        let name = format!("{stem}-{date}-{n}.{ext}");
+        let name = format!("{}-{date}-{n}.{ext}", slug(stem));
         match fs::OpenOptions::new().write(true).create_new(true).open(images.join(&name)) {
             Ok(mut f) => {
                 let res = write(&mut f).and_then(|_| f.sync_all());
@@ -172,6 +190,11 @@ mod tests {
     }
     #[test] fn image_links_skips_urls() {
         assert_eq!(image_links("![](https://x/y.png) ![](images/a.png) ![](C:/a.png)"), ["images/a.png"]);
+    }
+    #[test] fn save_image_slugs_spaces() {
+        let d = tempdir().unwrap();
+        let l = save_image(d.path(), "Ma note.md", b"1", "png").unwrap();
+        assert_eq!(l, format!("images/Ma-note-{}-1.png", today()));
     }
     #[test] fn owned_images_filters_by_stem() {
         let l = vec!["images/n-1.png".to_string(), "images/other-1.png".into(), "../images/n-2.png".into()];

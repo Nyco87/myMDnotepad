@@ -80,20 +80,38 @@ fn split_rel(rel: &str) -> (&str, &str) {
     (dir, file.rsplit_once('.').map_or(file, |(s, _)| s))
 }
 
-/// Après le renommage/déplacement d'une note de `old_rel` vers `new_rel` : ses images possédées
-/// la suivent (jamais d'écrasement) et les autres liens relatifs sont recalculés.
-/// La note n'est réécrite que si au moins un lien a changé.
-fn follow_note(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String> {
+/// Clés (chemins normalisés, minuscules) des images référencées par les notes autres que `exclude`.
+fn referenced_elsewhere(root: &Path, exclude: &Path) -> HashSet<String> {
+    let mut notes = vec![];
+    collect_md(root, &mut notes);
+    let mut referenced = HashSet::new();
+    for n in notes {
+        if n == exclude {
+            continue;
+        }
+        let nrel = to_rel(root, &n);
+        let ndir = split_rel(&nrel).0.to_string();
+        let Ok(other) = read_note(root, &nrel) else { continue };
+        for l in images::image_links(&other.content) {
+            if let Some(parts) = norm_join(&ndir, &l) {
+                referenced.insert(parts.join("/").to_lowercase());
+            }
+        }
+    }
+    referenced
+}
+
+/// Déplace (ou copie si une autre note y fait référence) les images possédées, et recalcule
+/// les autres liens. Remplit `map` au fur et à mesure pour qu'un échec partiel reste cohérent.
+fn relocate_links(
+    root: &Path, old_rel: &str, new_rel: &str, links: &[String], map: &mut HashMap<String, String>,
+) -> Result<(), String> {
     let (old_dir, old_stem) = split_rel(old_rel);
     let (new_dir, new_stem) = split_rel(new_rel);
-    let note = read_note(root, new_rel)?;
-    let links = images::image_links(&note.content);
-    if links.is_empty() {
-        return Ok(());
-    }
-    let mut map: HashMap<String, String> = HashMap::new();
-    let owned_prefix = format!("images/{old_stem}-");
-    for link in &links {
+    let owned_prefix = format!("images/{}-", images::slug(old_stem));
+    let new_slug = images::slug(new_stem);
+    let mut shared: Option<HashSet<String>> = None;
+    for link in links {
         if map.contains_key(link) {
             continue;
         }
@@ -104,14 +122,22 @@ fn follow_note(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String> 
                 continue;
             }
             let dest_dir = resolve(root, &format!("{new_dir}/images").trim_start_matches('/').to_string())?;
-            let new_name = format!("{new_stem}-{rest}");
+            let new_name = format!("{new_slug}-{rest}");
             let direct = dest_dir.join(&new_name);
-            let to = if from == direct {
+            if from == direct {
                 continue;
-            } else if from.parent() == Some(dest_dir.as_path())
-                && from.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(&new_name))
-            {
-                direct // simple changement de casse
+            }
+            let case_only = from.parent() == Some(dest_dir.as_path())
+                && from.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(&new_name));
+            let key = norm_join(old_dir, link).map(|p| p.join("/").to_lowercase()).unwrap_or_default();
+            let is_shared = shared
+                .get_or_insert_with(|| {
+                    let this = resolve(root, new_rel).unwrap_or_default();
+                    referenced_elsewhere(root, &this)
+                })
+                .contains(&key);
+            let to = if case_only && !is_shared {
+                direct
             } else {
                 let p = Path::new(&new_name);
                 let stem = p.file_stem().unwrap_or_default().to_string_lossy().into_owned();
@@ -119,7 +145,11 @@ fn follow_note(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String> 
                 fs::create_dir_all(&dest_dir).map_err(|e| format!("Impossible de créer le dossier des images : {e}"))?;
                 unique_path(&dest_dir, &stem, ext.as_deref())
             };
-            fs::rename(&from, &to).map_err(|e| format!("Impossible de déplacer l'image : {e}"))?;
+            if is_shared {
+                fs::copy(&from, &to).map_err(|e| format!("Impossible de copier l'image : {e}"))?;
+            } else {
+                fs::rename(&from, &to).map_err(|e| format!("Impossible de déplacer l'image : {e}"))?;
+            }
             let name = to.file_name().unwrap_or_default().to_string_lossy().into_owned();
             map.insert(link.clone(), format!("images/{name}"));
         } else if old_dir != new_dir {
@@ -131,11 +161,26 @@ fn follow_note(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String> 
             }
         }
     }
+    Ok(())
+}
+
+/// Après le renommage/déplacement d'une note de `old_rel` vers `new_rel` : ses images possédées
+/// la suivent (jamais d'écrasement) et les autres liens relatifs sont recalculés.
+/// La note n'est réécrite que si au moins un lien a changé. En cas d'échec en cours de route,
+/// les liens des images déjà déplacées sont écrits avant de renvoyer l'erreur.
+fn follow_note(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String> {
+    let note = read_note(root, new_rel)?;
+    let links = images::image_links(&note.content);
+    if links.is_empty() {
+        return Ok(());
+    }
+    let mut map: HashMap<String, String> = HashMap::new();
+    let res = relocate_links(root, old_rel, new_rel, &links, &mut map);
     let updated = images::rewrite_image_links(&note.content, |l| map.get(l).cloned());
     if updated != note.content {
         write_note(root, new_rel, &updated)?;
     }
-    Ok(())
+    res
 }
 
 fn collect_md(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -158,39 +203,23 @@ fn unshared_owned_images(root: &Path, rel: &str) -> Vec<PathBuf> {
     let (dir, stem) = split_rel(rel);
     let Ok(note) = read_note(root, rel) else { return vec![] };
     let links = images::image_links(&note.content);
-    let key = |parts: &[String]| parts.join("/").to_lowercase();
     let mut mine: Vec<(String, PathBuf)> = vec![];
     for link in images::owned_images(stem, &links) {
         let Some(parts) = norm_join(dir, &link) else { continue };
         if let Ok(p) = resolve(root, &parts.join("/")) {
             if p.is_file() {
-                mine.push((key(&parts), p));
+                mine.push((parts.join("/").to_lowercase(), p));
             }
         }
     }
     if mine.is_empty() {
         return vec![];
     }
-    let this = resolve(root, rel).ok();
-    let mut notes = vec![];
-    collect_md(root, &mut notes);
-    let mut referenced: HashSet<String> = HashSet::new();
-    for n in notes {
-        if Some(&n) == this.as_ref() {
-            continue;
-        }
-        let nrel = to_rel(root, &n);
-        let ndir = split_rel(&nrel).0.to_string();
-        let Ok(other) = read_note(root, &nrel) else { continue };
-        for l in images::image_links(&other.content) {
-            if let Some(parts) = norm_join(&ndir, &l) {
-                referenced.insert(key(&parts));
-            }
-        }
-    }
+    let referenced = referenced_elsewhere(root, &resolve(root, rel).unwrap_or_default());
     let mut seen = HashSet::new();
     mine.into_iter().filter(|(k, _)| !referenced.contains(k) && seen.insert(k.clone())).map(|(_, p)| p).collect()
 }
+
 
 pub fn rename_entry(root: &Path, rel: &str, new_name: &str) -> Result<String, String> {
     let src = resolve(root, rel)?;
@@ -382,5 +411,39 @@ sans image
         move_entry(r, "A", "B").unwrap();
         assert!(r.join("B/A/images/n-1.png").is_file());
         assert_eq!(fs::read_to_string(r.join("B/A/n.md")).unwrap(), "![](images/n-1.png)");
+    }
+    #[test] fn rename_note_with_spaces_slugs_images() {
+        let d = tempdir().unwrap(); let r = d.path();
+        md_with(r, "Ma note.md", "![](images/Ma-note-2026-10-24-1.png)");
+        md_with(r, "images/Ma-note-2026-10-24-1.png", "img");
+        assert_eq!(rename_entry(r, "Ma note.md", "Autre note").unwrap(), "Autre note.md");
+        assert!(r.join("images/Autre-note-2026-10-24-1.png").is_file());
+        assert_eq!(fs::read_to_string(r.join("Autre note.md")).unwrap(), "![](images/Autre-note-2026-10-24-1.png)");
+    }
+    #[test] fn move_copies_image_shared_with_other_note() {
+        let d = tempdir().unwrap(); let r = d.path();
+        md_with(r, "n.md", "![](images/n-1.png)");
+        md_with(r, "o.md", "![](images/n-1.png)");
+        md_with(r, "images/n-1.png", "img");
+        fs::create_dir(r.join("B")).unwrap();
+        move_entry(r, "n.md", "B").unwrap();
+        assert!(r.join("B/images/n-1.png").is_file());
+        assert!(r.join("images/n-1.png").is_file());
+        assert_eq!(fs::read_to_string(r.join("o.md")).unwrap(), "![](images/n-1.png)");
+        assert_eq!(fs::read_to_string(r.join("B/n.md")).unwrap(), "![](images/n-1.png)");
+    }
+    #[cfg(windows)]
+    #[test] fn partial_failure_still_rewrites_moved_links() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let d = tempdir().unwrap(); let r = d.path();
+        md_with(r, "n.md", "![](images/n-1.png) ![](images/n-2.png)");
+        md_with(r, "images/n-1.png", "a");
+        md_with(r, "images/n-2.png", "b");
+        fs::create_dir(r.join("B")).unwrap();
+        // Verrou sans partage de suppression sur la 2e image : son déplacement échoue.
+        let _lock = fs::OpenOptions::new().read(true).share_mode(1).open(r.join("images/n-2.png")).unwrap();
+        assert!(move_entry(r, "n.md", "B").is_err());
+        assert_eq!(fs::read_to_string(r.join("B/n.md")).unwrap(), "![](images/n-1.png) ![](images/n-2.png)");
+        assert!(r.join("B/images/n-1.png").is_file());
     }
 }
