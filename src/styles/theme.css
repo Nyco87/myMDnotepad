@@ -55,7 +55,8 @@ body {
   border-left: 3px solid var(--accent);
   color: #bdbdbd;
 }
-.ProseMirror mark { background: #9a6700; color: #fff3c4; border-radius: 2px; padding: 0 0.1em; }
+/* Surlignage : teinte de l'accent Windows posée sur le fond sombre de l'éditeur ; le texte garde sa couleur. */
+.ProseMirror mark { background: var(--accent-tint-35); color: inherit; border-radius: 2px; padding: 0 0.1em; }
 .ProseMirror code {
   font-family: "Cascadia Mono", Consolas, monospace;
   background: rgba(255, 255, 255, 0.08);
@@ -257,7 +258,7 @@ body {
 .tb-btn.active { background: var(--accent-tint-22); color: var(--accent); }
 .tb-btn.b-bold { font-weight: 700; }
 .tb-btn.b-italic { font-style: italic; }
-.tb-btn.b-highlight { background-image: linear-gradient(transparent 60%, #9a6700 60%); font-weight: 600; }
+.tb-btn.b-highlight { background-image: linear-gradient(transparent 60%, var(--accent) 60%); font-weight: 600; }
 .tb-btn.b-code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; }
 .tb-heading { min-width: 96px; text-align: left; }
 .tb-sep { width: 1px; height: 18px; margin: 0 4px; background: var(--border); }

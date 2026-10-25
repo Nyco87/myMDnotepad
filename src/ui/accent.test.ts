@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 const listeners: ((hex: string) => void)[] = [];
 vi.mock("../api", () => ({
@@ -42,4 +42,15 @@ test("initAccent applies the current accent and follows live changes", async () 
   expect(document.documentElement.style.getPropertyValue("--accent")).toBe("#e74856");
   stop();
   expect(listeners).toHaveLength(0);
+});
+
+describe("highlight style", () => {
+  it("is derived from the accent, not a fixed amber", async () => {
+    const { readFileSync } = await import("node:fs");
+    const css = readFileSync("src/styles/theme.css", "utf8");
+    const rule = /\.ProseMirror mark \{[^}]*\}/.exec(css)![0];
+    expect(rule).toContain("var(--accent-tint-35)");
+    expect(rule).toContain("color: inherit");
+    expect(css).not.toContain("#9a6700");
+  });
 });
