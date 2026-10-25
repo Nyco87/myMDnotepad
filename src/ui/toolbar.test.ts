@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../api", () => ({
@@ -30,7 +32,7 @@ describe("toolbar", () => {
   it("has the buttons in the specified order with French tooltips", () => {
     const { el } = setup("a\n");
     const ids = [...el.querySelectorAll<HTMLElement>(".tb-btn")].map((b) => b.dataset.id);
-    expect(ids).toEqual(["bold", "italic", "strike", "highlight", "code", "heading", "bullet", "ordered", "task", "quote", "alert", "codeblock", "table", "link", "image", "hr", "diagram", "emoji"]);
+    expect(ids).toEqual(["heading", "bold", "italic", "strike", "highlight", "code", "emoji", "bullet", "ordered", "task", "quote", "alert", "codeblock", "table", "link", "image", "hr", "diagram"]);
     expect((el.querySelector("[data-id=bold]") as HTMLElement).title).toBe("Gras (Ctrl+B)");
   });
 
@@ -52,16 +54,23 @@ describe("toolbar", () => {
     expect(ed.getMarkdown()).toBe("> [!CAUTION]\n> texte\n");
   });
 
-  it("diagram button sits before Symboles and opens the workshop", async () => {
+  it("diagram button is last and opens the workshop", async () => {
     const { btn, el } = setup("a\n");
     const ids = [...el.querySelectorAll<HTMLElement>(".tb-btn")].map((b) => b.dataset.id);
-    expect(ids.indexOf("diagram")).toBe(ids.indexOf("emoji") - 1);
+    expect(ids.indexOf("diagram")).toBe(ids.length - 1);
     expect(btn("diagram").title).toBe("Schéma");
     expect(btn("diagram").textContent).toBe("🔀");
     btn("diagram").click();
     await vi.waitFor(() => expect(document.querySelector(".ws-overlay")).not.toBeNull());
     (document.querySelector(".ws-cancel") as HTMLElement).click();
     expect(document.querySelector(".ws-overlay")).toBeNull();
+  });
+
+  it("highlight_button_swatch_uses_the_same_tint_as_the_mark", () => {
+    const css = readFileSync(resolve(__dirname, "../styles/theme.css"), "utf8");
+    const mark = /\.ProseMirror mark \{[^}]*background: ([^;]+);/.exec(css)![1];
+    const btn = /\.tb-btn\.b-highlight \{[^}]*\}/.exec(css)![0];
+    expect(btn).toContain(`transparent 60%, ${mark} 60%`);
   });
 
   it("symbols_button_uses_omega_and_tooltip", () => {

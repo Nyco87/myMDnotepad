@@ -258,7 +258,7 @@ body {
 .tb-btn.active { background: var(--accent-tint-22); color: var(--accent); }
 .tb-btn.b-bold { font-weight: 700; }
 .tb-btn.b-italic { font-style: italic; }
-.tb-btn.b-highlight { background-image: linear-gradient(transparent 60%, var(--accent) 60%); font-weight: 600; }
+.tb-btn.b-highlight { background-image: linear-gradient(transparent 60%, var(--accent-tint-35) 60%); font-weight: 600; }
 .tb-btn.b-code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; }
 .tb-heading { min-width: 96px; text-align: left; }
 .tb-sep { width: 1px; height: 18px; margin: 0 4px; background: var(--border); }

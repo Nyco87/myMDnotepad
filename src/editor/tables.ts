@@ -1,4 +1,4 @@
-import { Plugin, TextSelection, type Command, type Transaction } from "prosemirror-state";
+import { NodeSelection, Plugin, TextSelection, type Command, type Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import {
   addColumnAfter,
@@ -12,6 +12,7 @@ import {
   goToNextCell,
   isInTable,
   selectionCell,
+  CellSelection,
   TableMap,
 } from "prosemirror-tables";
 import { showContextMenu, type ContextMenuItem } from "../ui/context-menu";
@@ -97,6 +98,42 @@ export const deleteColumnCmd: Command = (state, dispatch) => {
   return deleteColumn(state, dispatch);
 };
 
+/** Deletes the table holding the selection; an emptied document keeps one empty paragraph. */
+export const deleteTableCmd: Command = (state, dispatch) => {
+  if (!isInTable(state)) return false;
+  return deleteTable(state, dispatch && ((tr) => {
+    if (tr.doc.childCount === 0) tr.insert(0, state.schema.nodes.paragraph.create());
+    dispatch(tr.scrollIntoView());
+  }));
+};
+
+/**
+ * Backspace / Delete with the whole table selected (every cell, or the table as a node): removes the table.
+ * Any other selection is left to the default behaviour.
+ */
+export const deleteWholeSelectedTable: Command = (state, dispatch) => {
+  const sel = state.selection;
+  if (sel instanceof NodeSelection && sel.node.type.name === "table") {
+    if (dispatch) {
+      const tr = state.tr.delete(sel.from, sel.to);
+      if (tr.doc.childCount === 0) tr.insert(0, state.schema.nodes.paragraph.create());
+      const pos = Math.min(sel.from, tr.doc.content.size);
+      tr.setSelection(TextSelection.near(tr.doc.resolve(pos)));
+      dispatch(tr.scrollIntoView());
+    }
+    return true;
+  }
+  if (sel instanceof CellSelection) {
+    const t = findTable(sel.$anchorCell);
+    if (!t) return false;
+    const map = TableMap.get(t.node);
+    const rect = map.rectBetween(sel.$anchorCell.pos - t.start, sel.$headCell.pos - t.start);
+    if (rect.left !== 0 || rect.top !== 0 || rect.right !== map.width || rect.bottom !== map.height) return false;
+    return deleteTableCmd(state, dispatch);
+  }
+  return false;
+};
+
 /** Sets the alignment of the whole column holding the cursor. */
 export function setColumnAlign(align: "left" | "center" | "right" | null): Command {
   return (state, dispatch) => {
@@ -157,6 +194,7 @@ export function tableMenuItems(view: EditorView): ContextMenuItem[] {
     { label: "Aligner à droite", action: run(setColumnAlign("right")) },
     { label: "Supprimer la ligne", action: run(deleteRowCmd), danger: true },
     { label: "Supprimer la colonne", action: run(deleteColumnCmd), danger: true },
+    { label: "Supprimer le tableau", action: run(deleteTableCmd), danger: true },
   ];
 }
 

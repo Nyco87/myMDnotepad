@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import { TextSelection } from "prosemirror-state";
 import type { Node as PMNode } from "prosemirror-model";
 import { makeEditor, pressKey, setCursor } from "./test-helpers";
-import { insertionAt, insertAtBoundary, addRowBeforeCmd, insertTable, setColumnAlign, deleteColumnCmd, deleteRowCmd, addRowAfterCmd } from "./tables";
+import { CellSelection } from "prosemirror-tables";
+import { NodeSelection } from "prosemirror-state";
+import { tableMenuItems, deleteTableCmd, insertionAt, insertAtBoundary, addRowBeforeCmd, insertTable, setColumnAlign, deleteColumnCmd, deleteRowCmd, addRowAfterCmd } from "./tables";
 
 const MD3 = "| a | b |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n";
 
@@ -182,5 +184,68 @@ describe("table boundary insertion", () => {
     expect(text(ed.view.state.doc, 1)).toEqual(["", "1", "2", ""]);
     insertAtBoundary(ed.view, findTable(ed.view.state.doc)!.pos, "col", 2);
     expect(text(ed.view.state.doc, 0)).toEqual(["", "a", "", "b", ""]);
+  });
+});
+
+describe("table deletion", () => {
+  const names = (ed: ReturnType<typeof makeEditor>) => {
+    const out: string[] = [];
+    ed.view.state.doc.forEach((n) => out.push(n.type.name));
+    return out;
+  };
+  const selectAllCells = (ed: ReturnType<typeof makeEditor>) => {
+    const doc = ed.view.state.doc;
+    const a = cellPos(doc, 0, 0) - 2;
+    const b = cellPos(doc, 2, 1) - 2;
+    ed.view.dispatch(ed.view.state.tr.setSelection(CellSelection.create(doc, a, b)));
+  };
+
+  it("context_menu_has_a_danger_delete_table_item", () => {
+    const ed = makeEditor(MD3 + "\nafter\n");
+    setCursor(ed.view, cellPos(ed.view.state.doc, 1, 0));
+    const item = tableMenuItems(ed.view).find((i) => i.label === "Supprimer le tableau")!;
+    expect(item.danger).toBe(true);
+    item.action();
+    expect(names(ed)).toEqual(["paragraph"]);
+    expect(ed.getMarkdown()).toBe("after\n");
+  });
+
+  it("deleting_the_only_block_leaves_an_empty_paragraph", () => {
+    const ed = makeEditor(MD3);
+    setCursor(ed.view, cellPos(ed.view.state.doc, 1, 0));
+    expect(deleteTableCmd(ed.view.state, ed.view.dispatch)).toBe(true);
+    expect(names(ed)).toEqual(["paragraph"]);
+  });
+
+  for (const key of ["Backspace", "Delete"]) {
+    it(`${key}_deletes_table_when_all_cells_selected`, () => {
+      const ed = makeEditor(MD3 + "\nafter\n");
+      selectAllCells(ed);
+      expect(pressKey(ed.view, key)).toBe(true);
+      expect(names(ed)).toEqual(["paragraph"]);
+    });
+
+    it(`${key}_deletes_table_when_node_selected`, () => {
+      const ed = makeEditor(MD3 + "\nafter\n");
+      const t = findTable(ed.view.state.doc)!;
+      ed.view.dispatch(ed.view.state.tr.setSelection(NodeSelection.create(ed.view.state.doc, t.pos)));
+      expect(pressKey(ed.view, key)).toBe(true);
+      expect(names(ed)).toEqual(["paragraph"]);
+    });
+  }
+
+  it("backspace_with_partial_cell_selection_does_not_delete_the_table", () => {
+    const ed = makeEditor(MD3);
+    const doc = ed.view.state.doc;
+    ed.view.dispatch(ed.view.state.tr.setSelection(CellSelection.create(doc, cellPos(doc, 1, 0) - 2, cellPos(doc, 1, 1) - 2)));
+    pressKey(ed.view, "Backspace");
+    expect(findTable(ed.view.state.doc)).not.toBeNull();
+  });
+
+  it("backspace_in_a_cell_with_a_caret_keeps_the_table", () => {
+    const ed = makeEditor(MD3);
+    setCursor(ed.view, cellPos(ed.view.state.doc, 1, 0) + 1);
+    pressKey(ed.view, "Backspace");
+    expect(findTable(ed.view.state.doc)).not.toBeNull();
   });
 });

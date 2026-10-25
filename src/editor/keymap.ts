@@ -11,7 +11,7 @@ import { splitListItem } from "prosemirror-schema-list";
 import { NodeSelection, Selection, TextSelection, type Command, type Plugin } from "prosemirror-state";
 import type { Schema } from "prosemirror-model";
 import { schema as defaultSchema } from "../markdown/schema";
-import { tabNextCell, tabPrevCell } from "./tables";
+import { deleteWholeSelectedTable, tabNextCell, tabPrevCell } from "./tables";
 
 /* ------------------------------------------------------------------ */
 /* Command factories (also used by the toolbar, task 10)               */
@@ -96,7 +96,7 @@ export function insertLink(href: string): Command {
 /* Enter: markdown fences and sticky blocks                            */
 /* ------------------------------------------------------------------ */
 
-/** "```lang" or "---" alone in a paragraph, Enter pressed at its end. */
+/** "```lang" or "---" / "***" / "___" alone in a paragraph, Enter pressed at its end. */
 const fenceOrRuleOnEnter: Command = (state, dispatch) => {
   const { $from, empty } = state.selection;
   const { paragraph, code_block, horizontal_rule } = state.schema.nodes;
@@ -105,7 +105,8 @@ const fenceOrRuleOnEnter: Command = (state, dispatch) => {
   if ($from.parent.childCount !== 1 || !$from.parent.firstChild!.isText) return false;
 
   const fence = /^```([\w+#.-]*)$/.exec(text);
-  const rule = text === "---";
+  // `---`, `***`, `___` (3 or more of the same character; surrounding blanks are tolerated).
+  const rule = /^[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*$/.test(text);
   if (!fence && !rule) return false;
 
   const container = $from.node($from.depth - 1);
@@ -259,7 +260,8 @@ export function buildKeymap(schema: Schema = defaultSchema): Plugin {
     "Mod-y": redo,
     "Mod-Shift-z": redo,
 
-    Backspace: undoInputRule,
+    Backspace: chainCommands(deleteWholeSelectedTable, undoInputRule),
+    Delete: deleteWholeSelectedTable,
 
     "Mod-Enter": toggleTaskItem,
     Enter: chainCommands(

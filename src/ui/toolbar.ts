@@ -186,6 +186,7 @@ export function mountToolbar(
   };
 
   const groups: ButtonDef[][] = [
+    [], // the heading dropdown goes here
     [
       { id: "bold", label: "G", title: "Gras (Ctrl+B)", className: "b-bold", active: (s) => markActive(s, "strong"), command: () => toggleMark("strong") },
       { id: "italic", label: "I", title: "Italique (Ctrl+I)", className: "b-italic", active: (s) => markActive(s, "em"), command: () => toggleMark("em") },
@@ -196,8 +197,26 @@ export function mountToolbar(
       }, active: (s) => markActive(s, "strike"), command: () => toggleMark("strike") },
       { id: "highlight", label: "A", title: "Surligner (Ctrl+Shift+H)", className: "b-highlight", active: (s) => markActive(s, "highlight"), command: () => toggleMark("highlight") },
       { id: "code", label: "</>", title: "Code en ligne (Ctrl+E)", className: "b-code", active: (s) => markActive(s, "code"), command: () => toggleMark("code") },
+      {
+        id: "emoji",
+        label: "Ω",
+        title: "Symboles",
+        popup: ".emoji-palette",
+        run: async (btn, view) => {
+          const settings = await getSettings();
+          openEmojiPalette(btn, settings.recent_emojis, (e) => {
+            if (!view.isDestroyed) {
+              view.dispatch(view.state.tr.insertText(e).scrollIntoView());
+              view.focus();
+            }
+            void (async () => {
+              const fresh = await getSettings(); // re-read: never overwrite other settings with a stale copy
+              await saveSettings({ ...fresh, recent_emojis: pushRecent(fresh.recent_emojis, e) });
+            })().catch((err) => console.error("recent emojis not saved", err));
+          });
+        },
+      },
     ],
-    [], // the heading dropdown goes here
     [
       { id: "bullet", label: "•≡", title: "Liste à puces", active: inNode("bullet_list"), command: toggleBlock("bullet_list") },
       { id: "ordered", label: "1≡", title: "Liste numérotée", active: inNode("ordered_list"), command: toggleBlock("ordered_list") },
@@ -303,25 +322,6 @@ export function mountToolbar(
         title: "Schéma",
         run: (_btn, view) => createDiagram(view, onError),
       },
-      {
-        id: "emoji",
-        label: "Ω",
-        title: "Symboles",
-        popup: ".emoji-palette",
-        run: async (btn, view) => {
-          const settings = await getSettings();
-          openEmojiPalette(btn, settings.recent_emojis, (e) => {
-            if (!view.isDestroyed) {
-              view.dispatch(view.state.tr.insertText(e).scrollIntoView());
-              view.focus();
-            }
-            void (async () => {
-              const fresh = await getSettings(); // re-read: never overwrite other settings with a stale copy
-              await saveSettings({ ...fresh, recent_emojis: pushRecent(fresh.recent_emojis, e) });
-            })().catch((err) => console.error("recent emojis not saved", err));
-          });
-        },
-      },
     ],
   ];
 
@@ -412,7 +412,7 @@ export function mountToolbar(
       sep.className = "tb-sep";
       el.appendChild(sep);
     }
-    if (i === 1) el.appendChild(headingBtn);
+    if (i === 0) el.appendChild(headingBtn);
     for (const def of group) el.appendChild(makeButton(def));
   });
 
