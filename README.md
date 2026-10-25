@@ -5,6 +5,9 @@
 <h1 align="center">myMDnotepad</h1>
 
 <p align="center">
+  <a href="https://github.com/Nyco87/myMDnotepad/actions/workflows/ci.yml"><img src="https://github.com/Nyco87/myMDnotepad/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://codecov.io/gh/Nyco87/myMDnotepad"><img src="https://codecov.io/gh/Nyco87/myMDnotepad/graph/badge.svg" alt="Coverage"></a>
+  <a href="https://github.com/Nyco87/myMDnotepad/security/code-scanning"><img src="https://github.com/Nyco87/myMDnotepad/actions/workflows/github-code-scanning/codeql/badge.svg?branch=main" alt="CodeQL"></a>
   <img src="https://img.shields.io/badge/version-0.1.0-FBC02D" alt="Version 0.1.0">
   <img src="https://img.shields.io/badge/Windows-11-0078D4?logo=windows11&logoColor=white" alt="Windows 11">
   <img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2">
