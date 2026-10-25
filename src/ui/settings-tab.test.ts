@@ -61,6 +61,21 @@ describe("settings tab", () => {
     expect(host.querySelector("h3")?.textContent).toBe("Notes");
   });
 
+  it("lays every row out as a flexible label+value group followed by a wrapping button group", async () => {
+    const { tab, host } = setup();
+    await tab.refresh();
+    const rows = [...host.querySelectorAll(".settings-row")];
+    expect(rows.length).toBe(4);
+    const [notes, file] = rows;
+    for (const r of [notes, file]) {
+      expect(r.children[0].classList.contains("settings-main")).toBe(true);
+      expect(r.children[1].classList.contains("settings-actions")).toBe(true);
+    }
+    expect(file.querySelectorAll(".settings-actions > button").length).toBe(3);
+    expect(file.querySelector<HTMLElement>(".settings-main .settings-path")!.title).toBe(appdata.path);
+    expect(rows[2].querySelector(".settings-main .settings-slider")).not.toBeNull();
+  });
+
   it("opens the notes folder in the explorer and changes it through the safe flow", async () => {
     const { deps, tab, host } = setup();
     await tab.refresh();

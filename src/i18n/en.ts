@@ -56,7 +56,7 @@ export const en: Record<keyof typeof fr, string> = {
   "toolbar.imageFailed": "Cannot insert the image: {err}",
   "sidebar.defaultNote": "New note",
   "sidebar.defaultFolder": "New folder",
-  "sidebar.newNote": "＋ New note",
+  "sidebar.newNote": "＋ New",
   "sidebar.newNoteIcon": "New note (Ctrl+N)",
   "sidebar.collapse": "Collapse panel (Ctrl+)",
   "sidebar.expand": "Expand panel (Ctrl+)",

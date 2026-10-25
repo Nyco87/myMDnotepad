@@ -85,8 +85,9 @@ describe("sidebar", () => {
     const { el } = await setup();
     const first = el.firstElementChild as HTMLElement;
     expect(first.tagName).toBe("BUTTON");
-    expect(first.textContent).toContain("＋ Nouvelle note");
-    expect(first.textContent).toContain("Ctrl+N");
+    expect(first.textContent).toContain("＋ Nouveau");
+    expect(first.title).toBe("Nouvelle note (Ctrl+N)");
+    expect(first.textContent).not.toContain("Ctrl+N");
     expect(el.querySelector('[data-path="Courses.md"]')?.textContent).toContain("Courses");
     expect(el.querySelector('[data-path="Courses.md"]')?.textContent).not.toContain(".md");
   });

@@ -88,6 +88,17 @@ export function mountSettingsTab(host: HTMLElement, deps: SettingsTabDeps): Sett
 
   const card = (): HTMLElement => make("div", "settings-card");
   const row = (): HTMLElement => make("div", "settings-row");
+  /** Groupe flexible (libellé + valeur) ; les boutons vont dans `actions`, qui passe sous la ligne si la place manque. */
+  const main = (...kids: HTMLElement[]): HTMLElement => {
+    const m = make("div", "settings-main");
+    m.append(...kids);
+    return m;
+  };
+  const actions = (...kids: HTMLElement[]): HTMLElement => {
+    const a = make("div", "settings-actions");
+    a.append(...kids);
+    return a;
+  };
   const hint = (text: string, cls = ""): HTMLElement => make("div", `settings-hint ${cls}`.trim(), text);
   const pathBox = (path: string | null): HTMLElement => {
     const p = make("span", "settings-path", path ?? t("settings.notes.none"));
@@ -163,13 +174,12 @@ export function mountSettingsTab(host: HTMLElement, deps: SettingsTabDeps): Sett
     {
       const c = section(t("settings.notes.h"));
       const r = row();
+      const openBtn = button(t("settings.notes.open"), openPath(state.root));
+      openBtn.disabled = !state.root;
       r.append(
-        make("span", "settings-label", t("settings.notes.folder")),
-        pathBox(state.root),
-        button(t("settings.notes.open"), openPath(state.root)),
-        button(t("settings.notes.change"), onChangeRoot, "settings-btn settings-primary"),
+        main(make("span", "settings-label", t("settings.notes.folder")), pathBox(state.root)),
+        actions(openBtn, button(t("settings.notes.change"), onChangeRoot, "settings-btn settings-primary")),
       );
-      (r.children[2] as HTMLButtonElement).disabled = !state.root;
       c.appendChild(r);
     }
 
@@ -178,11 +188,14 @@ export function mountSettingsTab(host: HTMLElement, deps: SettingsTabDeps): Sett
       const c = section(t("settings.file.h"));
       const loc = state.location;
       const r = row();
-      r.append(make("span", "settings-label", t("settings.file.location")), pathBox(loc?.path ?? null));
-      r.appendChild(button(t("settings.file.openFolder"), openPath(loc?.path ?? null)));
-      if (loc?.mode === "portable") r.appendChild(button(t("settings.file.moveToAppdata"), onMoveToAppdata));
-      else r.appendChild(button(t("settings.file.move"), onMove));
-      r.appendChild(button(t("settings.file.load"), onLoad));
+      r.appendChild(main(make("span", "settings-label", t("settings.file.location")), pathBox(loc?.path ?? null)));
+      r.appendChild(
+        actions(
+          button(t("settings.file.openFolder"), openPath(loc?.path ?? null)),
+          loc?.mode === "portable" ? button(t("settings.file.moveToAppdata"), onMoveToAppdata) : button(t("settings.file.move"), onMove),
+          button(t("settings.file.load"), onLoad),
+        ),
+      );
       c.appendChild(r);
       if (loc) c.appendChild(hint(t(MODE_HINT[loc.mode])));
       if (loc?.warning) c.appendChild(hint(t(`settings.file.warn.${loc.warning}` as const), "settings-warn"));
@@ -209,9 +222,7 @@ export function mountSettingsTab(host: HTMLElement, deps: SettingsTabDeps): Sett
       });
       r.append(
         make("span", "settings-label", t("settings.appearance.transparency")),
-        make("span", "settings-end", t("settings.appearance.opaque")),
-        slider,
-        make("span", "settings-end", t("settings.appearance.transparent")),
+        main(make("span", "settings-end", t("settings.appearance.opaque")), slider, make("span", "settings-end", t("settings.appearance.transparent"))),
       );
       c.append(r, hint(t("settings.appearance.hint")));
     }

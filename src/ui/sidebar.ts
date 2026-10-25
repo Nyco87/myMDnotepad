@@ -94,10 +94,9 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
   newBtn.className = "sb-new";
   const newLabel = document.createElement("span");
   tr(newLabel, { text: "sidebar.newNote" });
-  const newHint = document.createElement("span");
-  newHint.className = "sb-new-hint";
-  newHint.textContent = "Ctrl+N";
-  newBtn.append(newLabel, newHint);
+  newLabel.className = "sb-new-label";
+  tr(newBtn, { title: "sidebar.newNoteIcon" });
+  newBtn.append(newLabel);
 
   const banner = document.createElement("div");
   banner.className = "sb-banner";

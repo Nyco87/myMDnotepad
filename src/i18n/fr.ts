@@ -54,7 +54,7 @@ export const fr = {
   "toolbar.imageFailed": "Insertion de l'image impossible : {err}",
   "sidebar.defaultNote": "Nouvelle note",
   "sidebar.defaultFolder": "Nouveau dossier",
-  "sidebar.newNote": "＋ Nouvelle note",
+  "sidebar.newNote": "＋ Nouveau",
   "sidebar.newNoteIcon": "Nouvelle note (Ctrl+N)",
   "sidebar.collapse": "Réduire le panneau (Ctrl+)",
   "sidebar.expand": "Développer le panneau (Ctrl+)",
