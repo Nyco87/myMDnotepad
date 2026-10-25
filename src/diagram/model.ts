@@ -1,5 +1,7 @@
 import { generateFlow, parseFlow } from "./flow";
+import { generateGantt, parseGantt } from "./gantt";
 import { generatePie, parsePie } from "./pie";
+import { generateState, parseState } from "./state";
 
 /** Modèles « briques » des schémas de l'atelier. Chaque type a un parseur strict et un générateur déterministe. */
 
@@ -61,6 +63,10 @@ export function parseDiagram(code: string): DiagramModel | null {
       return parsePie(code);
     case "flowchart":
       return parseFlow(code);
+    case "stateDiagram-v2":
+      return parseState(code);
+    case "gantt":
+      return parseGantt(code);
     default:
       return null;
   }
@@ -72,7 +78,9 @@ export function generateDiagram(m: DiagramModel): string {
       return generatePie(m);
     case "flow":
       return generateFlow(m);
-    default:
-      throw new Error(`Type de schéma non pris en charge : ${m.kind}`);
+    case "state":
+      return generateState(m);
+    case "gantt":
+      return generateGantt(m);
   }
 }
