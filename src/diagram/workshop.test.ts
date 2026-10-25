@@ -30,6 +30,8 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+const FLOW = ['flowchart TD', '    n1["A"]', '    n2["B"]', '    n1 --> n2', ''].join(String.fromCharCode(10));
+
 describe("diagram workshop", () => {
   it("offers the four types and builds a pie from bricks", async () => {
     const result = openDiagramWorkshop({});
@@ -61,6 +63,30 @@ describe("diagram workshop", () => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     expect(await b).toBeNull();
     expect(q(".ws-overlay")).toBeNull();
+  });
+
+  it("Escape inside a select does not close the workshop", async () => {
+    const result = openDiagramWorkshop({ code: FLOW });
+    const select = q<HTMLSelectElement>(".ws-overlay select");
+    expect(select).not.toBeNull();
+    select.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(q(".ws-overlay")).not.toBeNull();
+    q(".ws-cancel").click();
+    expect(await result).toBeNull();
+  });
+
+  it("preview links cannot navigate away", async () => {
+    const result = openDiagramWorkshop({});
+    const a = document.createElement("a");
+    a.href = "https://example.com";
+    q(".ws-right").appendChild(a);
+    for (const type of ["click", "auxclick"]) {
+      const ev = new MouseEvent(type, { bubbles: true, cancelable: true });
+      a.dispatchEvent(ev);
+      expect(ev.defaultPrevented).toBe(true);
+    }
+    q(".ws-cancel").click();
+    await result;
   });
 
   it("opens the right editor, filled in, for readable code and returns it unchanged", async () => {

@@ -67,6 +67,26 @@ describe("mermaid node view", () => {
     expect(err.querySelector("pre")!.textContent).toBe("pie\n???");
   });
 
+  it("does not cache a failure that came from loading mermaid", async () => {
+    r.render.mockResolvedValueOnce({ ok: false, error: "load failed", transient: true });
+    make(PIE);
+    await flush();
+    expect(r.render).toHaveBeenCalledTimes(1);
+    r.render.mockResolvedValue({ ok: true, svg: "<svg></svg>" });
+    const { mount } = make(PIE);
+    await flush();
+    expect(r.render).toHaveBeenCalledTimes(2);
+    expect(mount.querySelector(".diagram svg")).not.toBeNull();
+  });
+
+  it("cancels middle-click navigation on a diagram", async () => {
+    const { mount } = make(PIE);
+    await flush();
+    const ev = new MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 1 });
+    mount.querySelector(".diagram")!.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
   it("leaves the markdown strictly identical", async () => {
     const md = '```mermaid\n%%{init: {"theme": "dark"}}%%\npie\n  "a":1\n\n\n```\n';
     r.render.mockResolvedValue({ ok: false, error: "x" });

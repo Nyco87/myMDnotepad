@@ -51,6 +51,7 @@ function drawn(code: string): Promise<RenderResult> {
   if (hit) return Promise.resolve(hit);
   return enqueue(async () => {
     const result = await renderMermaid(code);
+    if (!result.ok && result.transient) return result; // mermaid n'a pas pu se charger : on réessaiera
     cache.set(key, result);
     if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value!);
     return result;
@@ -118,6 +119,7 @@ function mermaidView(initial: PMNode, getPos: () => number | undefined, onEdit: 
   };
   document.addEventListener("accent-changed", onAccent);
 
+  dom.addEventListener("auxclick", (e) => e.preventDefault());
   dom.addEventListener("click", (e) => {
     e.preventDefault();
     const pos = getPos();

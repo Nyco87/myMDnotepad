@@ -103,12 +103,21 @@ async function main(): Promise<void> {
     return persistChain;
   };
 
+  /** Un schéma en cours d'édition ne doit pas être abandonné en silence par une fermeture d'onglet. */
+  const workshopBlocksClose = (): boolean => {
+    if (!document.querySelector(".ws-overlay")) return false;
+    toast("Termine ou annule le schéma en cours.");
+    return true;
+  };
+
   const titlebar = mountTitlebar(ui.titlebar, {
     onActivate: (rel) => {
       tabs?.activate(rel);
       focusEditor();
     },
-    onClose: (rel) => void tabs?.close(rel).then(focusEditor),
+    onClose: (rel) => {
+      if (!workshopBlocksClose()) void tabs?.close(rel).then(focusEditor);
+    },
     onNew: () => void sidebar?.newNote(),
     onMenu: (r) => openMenu(r),
   });
@@ -205,6 +214,7 @@ async function main(): Promise<void> {
         e.preventDefault();
         e.stopPropagation();
         const active = tabs?.active();
+        if (workshopBlocksClose()) return;
         if (active) void tabs!.close(active).then(focusEditor);
       } else if (e.key === "Tab") {
         e.preventDefault();

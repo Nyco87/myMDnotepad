@@ -65,6 +65,8 @@ export function openDiagramWorkshop(opts: WorkshopOptions = {}): Promise<string 
     header.append(title, subtitle);
     const left = el("div", "ws-left");
     const preview = el("div", "ws-right");
+    // Le dessin mermaid peut contenir des liens : jamais de navigation hors de l'application.
+    for (const type of ["click", "auxclick"]) preview.addEventListener(type, (e) => e.preventDefault());
     const previewSvg = el("div", "ws-preview-svg");
     const previewMsg = el("div", "ws-preview-msg");
     preview.append(previewSvg, previewMsg);
@@ -237,6 +239,7 @@ export function openDiagramWorkshop(opts: WorkshopOptions = {}): Promise<string 
     // ---- Fermeture ----
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === "Escape") {
+        if (e.target instanceof HTMLSelectElement) return; // Échap ferme la liste déroulante, pas l'atelier
         e.preventDefault();
         e.stopPropagation();
         finish(null);

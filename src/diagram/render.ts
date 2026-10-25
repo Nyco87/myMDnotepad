@@ -3,7 +3,7 @@
  * chunk séparé), jamais sur le chemin critique du démarrage.
  */
 
-export type RenderResult = { ok: true; svg: string } | { ok: false; error: string };
+export type RenderResult = { ok: true; svg: string } | { ok: false; error: string; transient?: true };
 
 type Mermaid = typeof import("mermaid").default;
 
@@ -62,8 +62,10 @@ function configure(mermaid: Mermaid, accent: string): void {
  */
 export async function renderMermaid(code: string): Promise<RenderResult> {
   const id = `mdnote-mmd-${++counter}`;
+  let loaded = false;
   try {
     const mermaid = await load();
+    loaded = true;
     configure(mermaid, currentAccent());
     const { svg } = await mermaid.render(id, code);
     return { ok: true, svg };
@@ -72,6 +74,8 @@ export async function renderMermaid(code: string): Promise<RenderResult> {
     document.getElementById(id)?.remove();
     document.getElementById(`d${id}`)?.remove();
     const message = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: message.trim() || "Schéma illisible" };
+    const error = message.trim() || "Schéma illisible";
+    // Échec de chargement de mermaid (pas une erreur de syntaxe) : à retenter, à ne pas mémoriser.
+    return loaded ? { ok: false, error } : { ok: false, error, transient: true };
   }
 }
