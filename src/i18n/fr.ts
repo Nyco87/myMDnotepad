@@ -276,7 +276,7 @@ export const fr = {
   "settings.about.h": "À propos",
   "settings.about.version": "version {version}",
   "settings.about.tagline": "Éditeur Markdown portable",
-  "settings.about.license": "Licence : voir le dépôt GitHub",
+  "settings.about.license": "Licence : MIT",
   "settings.about.libs": "Bibliothèques principales : {list}",
   "titlebar.settings": "Réglages",
   "err.SETTINGS_NO_KNOWN_KEYS": "Ce fichier ne contient aucun réglage reconnu : il n'a pas été chargé.",

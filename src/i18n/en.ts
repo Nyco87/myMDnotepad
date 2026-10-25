@@ -278,7 +278,7 @@ export const en: Record<keyof typeof fr, string> = {
   "settings.about.h": "About",
   "settings.about.version": "version {version}",
   "settings.about.tagline": "Portable Markdown editor",
-  "settings.about.license": "License: see the GitHub repository",
+  "settings.about.license": "License: MIT",
   "settings.about.libs": "Main libraries: {list}",
   "titlebar.settings": "Settings",
   "err.SETTINGS_NO_KNOWN_KEYS": "This file contains no recognised setting: it was not loaded.",
