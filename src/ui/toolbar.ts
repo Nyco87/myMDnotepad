@@ -13,6 +13,8 @@ import {
   wrapIn,
 } from "../editor/keymap";
 import { pickAndInsertImage } from "../editor/images";
+import { ALERTS, insertAlert } from "../editor/alerts";
+import { ALERT_KINDS } from "../markdown/alert-kinds";
 import { insertTable, pickTableSize } from "../editor/tables";
 import { showContextMenu } from "./context-menu";
 import { openEmojiPalette, pushRecent } from "./emoji-palette";
@@ -202,6 +204,31 @@ export function mountToolbar(
     ],
     [
       { id: "quote", label: "❝", title: "Citation", active: inNode("blockquote"), command: toggleBlock("blockquote") },
+      {
+        id: "alert",
+        label: "Alerte ▾",
+        title: "Alerte (Note, Astuce, Important, Attention, Danger)",
+        className: "tb-alert",
+        active: inNode("alert"),
+        popup: ".ctx-menu",
+        run: (btn, view) => {
+          const r = btn.getBoundingClientRect();
+          showContextMenu(
+            r.left,
+            r.bottom + 4,
+            ALERT_KINDS.map((kind) => ({
+              label: ALERTS[kind].label,
+              action: () => {
+                if (view.isDestroyed) return;
+                // Inside an alert this changes its kind (insertAlert → setAlertKind) instead of nesting a new one.
+                insertAlert(kind)(view.state, view.dispatch, view);
+                view.focus();
+                refresh();
+              },
+            })),
+          );
+        },
+      },
       {
         id: "codeblock",
         label: "{ }",

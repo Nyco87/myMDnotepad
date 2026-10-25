@@ -30,8 +30,26 @@ describe("toolbar", () => {
   it("has the buttons in the specified order with French tooltips", () => {
     const { el } = setup("a\n");
     const ids = [...el.querySelectorAll<HTMLElement>(".tb-btn")].map((b) => b.dataset.id);
-    expect(ids).toEqual(["bold", "italic", "strike", "highlight", "code", "heading", "bullet", "ordered", "task", "quote", "codeblock", "table", "link", "image", "hr", "emoji"]);
+    expect(ids).toEqual(["bold", "italic", "strike", "highlight", "code", "heading", "bullet", "ordered", "task", "quote", "alert", "codeblock", "table", "link", "image", "hr", "emoji"]);
     expect((el.querySelector("[data-id=bold]") as HTMLElement).title).toBe("Gras (Ctrl+B)");
+  });
+
+  it("alert_button_opens_the_five_kinds_inserts_or_changes_kind", () => {
+    const { ed, btn } = setup("texte\n");
+    expect(btn("alert").textContent).toBe("Alerte ▾");
+    setCursor(ed.view, 2);
+    btn("alert").click();
+    const labels = () => [...document.querySelectorAll<HTMLElement>(".ctx-menu button")].map((b) => b.textContent);
+    expect(labels()).toEqual(["Note", "Astuce", "Important", "Attention", "Danger"]);
+    (document.querySelectorAll(".ctx-menu button")[3] as HTMLElement).click();
+    expect(ed.view.state.doc.firstChild!.type.name).toBe("alert");
+    expect(ed.view.state.doc.firstChild!.attrs.kind).toBe("warning");
+    expect(ed.getMarkdown()).toBe("> [!WARNING]\n> texte\n");
+    expect(btn("alert").classList.contains("active")).toBe(true);
+    // Cursor already inside an alert: the kind changes, nothing is nested.
+    btn("alert").click();
+    (document.querySelectorAll(".ctx-menu button")[4] as HTMLElement).click();
+    expect(ed.getMarkdown()).toBe("> [!CAUTION]\n> texte\n");
   });
 
   it("symbols_button_uses_omega_and_tooltip", () => {
