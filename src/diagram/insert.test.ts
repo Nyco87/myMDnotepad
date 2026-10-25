@@ -107,3 +107,20 @@ describe("editing a diagram", () => {
     expect(replaceDiagramCode(ed.view, 0, "pie\n")).toBe(false);
   });
 });
+
+describe("identity edit", () => {
+  it("keeps a block whose code ends with a blank line byte-identical", async () => {
+    const src = 'a\n\n```mermaid\npie\n    "a" : 1\n\n```\n';
+    const ed = makeEditor(src);
+    expect(ed.getMarkdown()).toBe(src);
+    let pos = -1;
+    ed.view.state.doc.forEach((n, off) => {
+      if (n.type.name === "code_block") pos = off;
+    });
+    const code = ed.view.state.doc.nodeAt(pos)!.textContent;
+    await editDiagramAt(ed.view, pos, code, () => {}, async (o) => o.code!);
+    expect(ed.getMarkdown()).toBe(src);
+    expect(replaceDiagramCode(ed.view, pos, code)).toBe(true);
+    expect(ed.getMarkdown()).toBe(src);
+  });
+});

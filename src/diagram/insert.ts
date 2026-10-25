@@ -68,6 +68,7 @@ export function insertDiagramCode(view: EditorView, code: string): void {
 export function replaceDiagramCode(view: EditorView, pos: number, code: string): boolean {
   const node = view.state.doc.nodeAt(pos);
   if (!node || !isMermaid(node)) return false;
+  if (code === node.textContent) return true;
   const text = blockText(code);
   if (text === node.textContent) return true;
   const content = text ? Fragment.from(view.state.schema.text(text)) : Fragment.empty;
@@ -102,7 +103,7 @@ export async function editDiagramAt(
     notify(`L'atelier de schémas n'a pas pu s'ouvrir : ${e instanceof Error ? e.message : String(e)}`);
     return;
   }
-  if (result === null || view.isDestroyed) return;
+  if (result === null || result === code || view.isDestroyed) return;
   const at = locate(view, pos, code);
   if (at < 0) {
     notify("Le schéma a changé entre-temps : votre modification n'a pas été appliquée.");
