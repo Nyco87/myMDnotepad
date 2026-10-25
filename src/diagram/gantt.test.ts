@@ -80,3 +80,20 @@ describe("gantt model", () => {
     expect(parseGantt(generateGantt(m))).toEqual(m);
   });
 });
+
+describe("gantt reserved words", () => {
+  const base = "gantt\n    dateFormat YYYY-MM-DD\n    section A\n";
+  it("parse rejects a task named like a directive, and a title with #", () => {
+    expect(parseGantt(base + "    title Plan :t1, 2026-01-05, 1d\n")).toBeNull();
+    expect(parseGantt(base + "    Section 2 :t1, 2026-01-05, 1d\n")).toBeNull();
+    expect(parseGantt(base + "    Titles :t1, 2026-01-05, 1d\n")).not.toBeNull();
+    expect(parseGantt("gantt\n    title a # b\n    dateFormat YYYY-MM-DD\n")).toBeNull();
+  });
+  it("validate explains in French", async () => {
+    const { validateModel } = await import("./validate");
+    const m: GanttModel = { kind: "gantt", title: "a#b", sections: [{ name: "S", tasks: [{ id: "t1", name: "click ici", start: { date: "2026-01-05" }, days: 1 }] }] };
+    const msgs = validateModel(m).map((e) => e.message);
+    expect(msgs).toContain("Ce nom ne peut pas commencer par « click ».");
+    expect(validateModel(m).some((e) => e.where === "title")).toBe(true);
+  });
+});

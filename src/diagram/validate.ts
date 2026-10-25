@@ -1,4 +1,4 @@
-import { isValidDate } from "./gantt";
+import { ganttKeyword, isValidDate } from "./gantt";
 import type { DiagramModel } from "./model";
 
 /** Une erreur de saisie : `where` désigne le champ (voir `paintErrors`), `message` est en français. */
@@ -42,6 +42,7 @@ export function validateModel(m: DiagramModel): ModelError[] {
     case "gantt": {
       const ids = new Set(m.sections.flatMap((s) => s.tasks.map((t) => t.id)));
       if (ids.size === 0) add("model", "Ajoutez au moins une tâche.");
+      if (m.title.includes("#")) add("title", "Le caractère « # » n'est pas autorisé ici.");
       let n = 0;
       m.sections.forEach((s, si) => {
         if (s.name.trim() === "") add(`section.${si}.name`, NEEDS_NAME);
@@ -54,7 +55,9 @@ export function validateModel(m: DiagramModel): ModelError[] {
           if (t.name.trim() === "") add(`task.${i}.name`, NEEDS_NAME);
           else {
             const bad = forbiddenChar(t.name);
+            const word = ganttKeyword(t.name);
             if (bad) add(`task.${i}.name`, bad);
+            else if (word) add(`task.${i}.name`, `Ce nom ne peut pas commencer par « ${word} ».`);
           }
           if ("date" in t.start) {
             if (!isValidDate(t.start.date)) add(`task.${i}.start`, "Date invalide (AAAA-MM-JJ).");

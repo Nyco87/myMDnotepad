@@ -8,6 +8,14 @@ export function isValidDate(s: string): boolean {
   return d.getUTCFullYear() === Number(m[1]) && d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3]);
 }
 
+const KEYWORDS = ["title", "dateFormat", "axisFormat", "excludes", "includes", "todayMarker", "click", "section", "tickInterval", "weekday"];
+
+/** Mot-clé Gantt par lequel le nom commence (mermaid le lirait comme une directive), sinon null. */
+export function ganttKeyword(name: string): string | null {
+  const w = /^\s*(\S+)(?=\s|$)/.exec(name)?.[1] ?? "";
+  return KEYWORDS.find((k) => k.toLowerCase() === w.toLowerCase()) ?? null;
+}
+
 /** Les identifiants `t1`…`tN` suivent l'ordre global des tâches. */
 export function generateGantt(m: GanttModel): string {
   const ids = new Map<string, string>();
@@ -35,6 +43,7 @@ export function parseGantt(code: string): GanttModel | null {
   let rest = lines.slice(1);
   const title = /^ {4}title (.+)$/.exec(rest[0] ?? "");
   if (title) {
+    if (title[1].includes("#")) return null;
     model.title = title[1];
     rest = rest.slice(1);
   }
@@ -47,7 +56,7 @@ export function parseGantt(code: string): GanttModel | null {
     }
     const m = TASK.exec(line);
     const current = model.sections[model.sections.length - 1];
-    if (!m || !current) return null;
+    if (!m || !current || ganttKeyword(m[1])) return null;
     const date = m[3].startsWith("after ") ? null : m[3];
     if (date !== null && !isValidDate(date)) return null;
     const task: GanttTask = {

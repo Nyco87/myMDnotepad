@@ -43,6 +43,7 @@ export function mountGanttEditor(root: HTMLElement, model: GanttModel, onChange:
         emit();
       }),
     );
+    root.appendChild(errorSlot("title"));
     root.appendChild(el("div", "ws-hint", "Format des dates : AAAA-MM-JJ"));
 
     let n = 0;
