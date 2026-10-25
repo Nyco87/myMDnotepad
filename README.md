@@ -5,6 +5,16 @@
 <h1 align="center">myMDnotepad</h1>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/version-0.1.0-FBC02D" alt="Version 0.1.0">
+  <img src="https://img.shields.io/badge/Windows-11-0078D4?logo=windows11&logoColor=white" alt="Windows 11">
+  <img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2">
+  <img src="https://img.shields.io/badge/Rust-stable-B7410E?logo=rust&logoColor=white" alt="Rust">
+  <img src="https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/portable-sans%20installation-5E4200" alt="Portable">
+  <img src="https://img.shields.io/badge/licence-MIT-green" alt="Licence MIT">
+</p>
+
+<p align="center">
   Éditeur de notes Markdown « tel que vous le lisez », portable, pour Windows 11.
 </p>
 
@@ -100,4 +110,4 @@ Technologies : [Tauri 2](https://tauri.app/) (Rust), TypeScript + Vite, [ProseMi
 
 ## Licence
 
-[MIT](LICENSE) © 2026 Nyco87
+[MIT](LICENSE) © 2026 Nicolas Morellet
