@@ -15,27 +15,48 @@ pub fn read_note(state: State<AppState>, rel: String) -> Result<NoteFile, String
 }
 
 #[tauri::command]
-pub fn write_note(state: State<AppState>, rel: String, content: String, expected_mtime: Option<u64>) -> Result<u64, String> {
+pub fn write_note(
+    state: State<AppState>,
+    rel: String,
+    content: String,
+    expected_mtime: Option<u64>,
+) -> Result<u64, String> {
     notes_fs::write_note(&state.root()?, &rel, &content, expected_mtime)
 }
 
 #[tauri::command]
-pub fn create_note(state: State<AppState>, dir_rel: String, base_name: String) -> Result<String, String> {
+pub fn create_note(
+    state: State<AppState>,
+    dir_rel: String,
+    base_name: String,
+) -> Result<String, String> {
     file_ops::create_note(&state.root()?, &dir_rel, &base_name)
 }
 
 #[tauri::command]
-pub fn create_folder(state: State<AppState>, dir_rel: String, name: String) -> Result<String, String> {
+pub fn create_folder(
+    state: State<AppState>,
+    dir_rel: String,
+    name: String,
+) -> Result<String, String> {
     file_ops::create_folder(&state.root()?, &dir_rel, &name)
 }
 
 #[tauri::command]
-pub fn rename_entry(state: State<AppState>, rel: String, new_name: String) -> Result<file_ops::Moved, String> {
+pub fn rename_entry(
+    state: State<AppState>,
+    rel: String,
+    new_name: String,
+) -> Result<file_ops::Moved, String> {
     file_ops::rename_entry(&state.root()?, &rel, &new_name)
 }
 
 #[tauri::command]
-pub fn move_entry(state: State<AppState>, rel: String, dest_dir_rel: String) -> Result<file_ops::Moved, String> {
+pub fn move_entry(
+    state: State<AppState>,
+    rel: String,
+    dest_dir_rel: String,
+) -> Result<file_ops::Moved, String> {
     file_ops::move_entry(&state.root()?, &rel, &dest_dir_rel)
 }
 
@@ -45,11 +66,20 @@ pub fn trash_entry(state: State<AppState>, rel: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn save_image(state: State<AppState>, note_rel: String, bytes: Vec<u8>, ext: String) -> Result<String, String> {
+pub fn save_image(
+    state: State<AppState>,
+    note_rel: String,
+    bytes: Vec<u8>,
+    ext: String,
+) -> Result<String, String> {
     images::save_image(&state.root()?, &note_rel, &bytes, &ext)
 }
 
 #[tauri::command]
-pub fn import_image(state: State<AppState>, note_rel: String, src_abs: String) -> Result<String, String> {
+pub fn import_image(
+    state: State<AppState>,
+    note_rel: String,
+    src_abs: String,
+) -> Result<String, String> {
     images::import_image(&state.root()?, &note_rel, &src_abs)
 }

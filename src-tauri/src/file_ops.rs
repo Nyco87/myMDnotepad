@@ -15,13 +15,21 @@ pub fn validate_name(name: &str) -> Result<(), String> {
     if name.chars().count() > 200 {
         return Err("Le nom est trop long (200 caractères maximum).".into());
     }
-    if name.chars().any(|c| "<>:\"/\\|?*".contains(c) || c.is_control()) {
+    if name
+        .chars()
+        .any(|c| "<>:\"/\\|?*".contains(c) || c.is_control())
+    {
         return Err("Le nom contient un caractère interdit : < > : \" / \\ | ? *".into());
     }
     if name.ends_with('.') || name.ends_with(' ') {
         return Err("Le nom ne peut pas finir par un point ou un espace.".into());
     }
-    let base = name.split('.').next().unwrap_or("").trim_end().to_ascii_uppercase();
+    let base = name
+        .split('.')
+        .next()
+        .unwrap_or("")
+        .trim_end()
+        .to_ascii_uppercase();
     let reserved = matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL")
         || ((base.starts_with("COM") || base.starts_with("LPT"))
             && base.len() == 4
@@ -49,7 +57,11 @@ pub fn unique_path(dir: &Path, stem: &str, ext: Option<&str>) -> PathBuf {
 
 fn strip_md(name: &str) -> &str {
     let t = name.trim();
-    if t.len() > 3 && t[t.len() - 3..].eq_ignore_ascii_case(".md") { &t[..t.len() - 3] } else { t }
+    if t.len() > 3 && t[t.len() - 3..].eq_ignore_ascii_case(".md") {
+        &t[..t.len() - 3]
+    } else {
+        t
+    }
 }
 
 pub fn create_note(root: &Path, dir_rel: &str, base: &str) -> Result<String, String> {
@@ -92,7 +104,9 @@ fn referenced_elsewhere(root: &Path, exclude: &Path) -> HashSet<String> {
         }
         let nrel = to_rel(root, &n);
         let ndir = split_rel(&nrel).0.to_string();
-        let Ok(other) = read_note(root, &nrel) else { continue };
+        let Ok(other) = read_note(root, &nrel) else {
+            continue;
+        };
         for l in images::image_links(&other.content) {
             if let Some(parts) = norm_join(&ndir, &l) {
                 referenced.insert(parts.join("/").to_lowercase());
@@ -105,7 +119,11 @@ fn referenced_elsewhere(root: &Path, exclude: &Path) -> HashSet<String> {
 /// Déplace (ou copie si une autre note y fait référence) les images possédées, et recalcule
 /// les autres liens. Remplit `map` au fur et à mesure pour qu'un échec partiel reste cohérent.
 fn relocate_links(
-    root: &Path, old_rel: &str, new_rel: &str, links: &[String], map: &mut HashMap<String, String>,
+    root: &Path,
+    old_rel: &str,
+    new_rel: &str,
+    links: &[String],
+    map: &mut HashMap<String, String>,
 ) -> Result<(), String> {
     let (old_dir, old_stem) = split_rel(old_rel);
     let (new_dir, new_stem) = split_rel(new_rel);
@@ -116,21 +134,27 @@ fn relocate_links(
         if map.contains_key(link) {
             continue;
         }
-        let rest = link.strip_prefix(&owned_prefix).filter(|r| !r.contains('/'));
+        let rest = link
+            .strip_prefix(&owned_prefix)
+            .filter(|r| !r.contains('/'));
         if let Some(rest) = rest {
-            let from = resolve(root, &format!("{old_dir}/{link}").trim_start_matches('/').to_string())?;
+            let from = resolve(root, format!("{old_dir}/{link}").trim_start_matches('/'))?;
             if !from.is_file() {
                 continue;
             }
-            let dest_dir = resolve(root, &format!("{new_dir}/images").trim_start_matches('/').to_string())?;
+            let dest_dir = resolve(root, format!("{new_dir}/images").trim_start_matches('/'))?;
             let new_name = format!("{new_slug}-{rest}");
             let direct = dest_dir.join(&new_name);
             if from == direct {
                 continue;
             }
             let case_only = from.parent() == Some(dest_dir.as_path())
-                && from.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(&new_name));
-            let key = norm_join(old_dir, link).map(|p| p.join("/").to_lowercase()).unwrap_or_default();
+                && from
+                    .file_name()
+                    .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(&new_name));
+            let key = norm_join(old_dir, link)
+                .map(|p| p.join("/").to_lowercase())
+                .unwrap_or_default();
             let is_shared = shared
                 .get_or_insert_with(|| {
                     let this = resolve(root, new_rel).unwrap_or_default();
@@ -141,24 +165,34 @@ fn relocate_links(
                 direct
             } else {
                 let p = Path::new(&new_name);
-                let stem = p.file_stem().unwrap_or_default().to_string_lossy().into_owned();
+                let stem = p
+                    .file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned();
                 let ext = p.extension().map(|e| e.to_string_lossy().into_owned());
-                fs::create_dir_all(&dest_dir).map_err(|e| format!("Impossible de créer le dossier des images : {e}"))?;
+                fs::create_dir_all(&dest_dir)
+                    .map_err(|e| format!("Impossible de créer le dossier des images : {e}"))?;
                 unique_path(&dest_dir, &stem, ext.as_deref())
             };
             if is_shared {
                 fs::copy(&from, &to).map_err(|e| format!("Impossible de copier l'image : {e}"))?;
             } else {
-                fs::rename(&from, &to).map_err(|e| format!("Impossible de déplacer l'image : {e}"))?;
+                fs::rename(&from, &to)
+                    .map_err(|e| format!("Impossible de déplacer l'image : {e}"))?;
             }
-            let name = to.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            let name = to
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
             map.insert(link.clone(), format!("images/{name}"));
-        } else if old_dir != new_dir {
-            if let Some(target) = norm_join(old_dir, link) {
-                let nl = rel_between(new_dir, &target);
-                if nl != *link {
-                    map.insert(link.clone(), nl);
-                }
+        } else if old_dir != new_dir
+            && let Some(target) = norm_join(old_dir, link)
+        {
+            let nl = rel_between(new_dir, &target);
+            if nl != *link {
+                map.insert(link.clone(), nl);
             }
         }
     }
@@ -189,14 +223,24 @@ fn follow_note(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String> 
 /// Une note n'est réécrite que si un lien a changé. Continue après un échec et renvoie la première erreur.
 fn follow_folder(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String> {
     let new_abs = resolve(root, new_rel)?;
-    let old_parts: Vec<String> = old_rel.split('/').filter(|s| !s.is_empty()).map(str::to_lowercase).collect();
-    let new_parts: Vec<String> = new_rel.split('/').filter(|s| !s.is_empty()).map(str::to_string).collect();
+    let old_parts: Vec<String> = old_rel
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .map(str::to_lowercase)
+        .collect();
+    let new_parts: Vec<String> = new_rel
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect();
     let mut notes = vec![];
     collect_md(&new_abs, &mut notes);
     let mut first_err: Option<String> = None;
     for n in notes {
         let note_new = to_rel(root, &n);
-        let Some(inner) = note_new.strip_prefix(new_rel) else { continue };
+        let Some(inner) = note_new.strip_prefix(new_rel) else {
+            continue;
+        };
         let note_old = format!("{old_rel}{inner}");
         let (old_dir, _) = split_rel(&note_old);
         let (new_dir, _) = split_rel(&note_new);
@@ -210,7 +254,10 @@ fn follow_folder(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String
         let updated = images::rewrite_image_links(&note.content, |link| {
             let target = norm_join(old_dir, link)?;
             let inside = target.len() > old_parts.len()
-                && target.iter().zip(&old_parts).all(|(a, b)| a.to_lowercase() == *b);
+                && target
+                    .iter()
+                    .zip(&old_parts)
+                    .all(|(a, b)| a.to_lowercase() == *b);
             if inside {
                 // Lien resté à l'intérieur du dossier : il a suivi le dossier. Un lien qui en sort puis y revient
                 // par son nom (« ../A/x.png ») suit le renommage (« ../B/x.png »).
@@ -218,11 +265,17 @@ fn follow_folder(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String
                     return None;
                 }
                 let renamed_only = old_parts.len() == new_parts.len()
-                    && old_parts[..old_parts.len() - 1].iter().zip(&new_parts).all(|(a, b)| *a == b.to_lowercase());
+                    && old_parts[..old_parts.len() - 1]
+                        .iter()
+                        .zip(&new_parts)
+                        .all(|(a, b)| *a == b.to_lowercase());
                 let old_last = &old_parts[old_parts.len() - 1];
                 let new_last = &new_parts[new_parts.len() - 1];
-                let mapped: Vec<String> =
-                    new_parts.iter().cloned().chain(target[old_parts.len()..].iter().cloned()).collect();
+                let mapped: Vec<String> = new_parts
+                    .iter()
+                    .cloned()
+                    .chain(target[old_parts.len()..].iter().cloned())
+                    .collect();
                 if renamed_only {
                     // Lien resté valide après le déplacement (le dossier a suivi) : on n'y touche pas.
                     if norm_join(new_dir, link).as_ref() == Some(&mapped) {
@@ -251,10 +304,10 @@ fn follow_folder(root: &Path, old_rel: &str, new_rel: &str) -> Result<(), String
             let nl = rel_between(new_dir, &target);
             (nl != link).then_some(nl)
         });
-        if updated != note.content {
-            if let Err(e) = write_note(root, &note_new, &updated, None) {
-                first_err.get_or_insert(e);
-            }
+        if updated != note.content
+            && let Err(e) = write_note(root, &note_new, &updated, None)
+        {
+            first_err.get_or_insert(e);
         }
     }
     first_err.map_or(Ok(()), Err)
@@ -278,15 +331,19 @@ fn collect_md(dir: &Path, out: &mut Vec<PathBuf>) {
 /// Images possédées par la note `rel` et qu'aucune autre note ne référence (chemins absolus).
 fn unshared_owned_images(root: &Path, rel: &str) -> Vec<PathBuf> {
     let (dir, stem) = split_rel(rel);
-    let Ok(note) = read_note(root, rel) else { return vec![] };
+    let Ok(note) = read_note(root, rel) else {
+        return vec![];
+    };
     let links = images::image_links(&note.content);
     let mut mine: Vec<(String, PathBuf)> = vec![];
     for link in images::owned_images(stem, &links) {
-        let Some(parts) = norm_join(dir, &link) else { continue };
-        if let Ok(p) = resolve(root, &parts.join("/")) {
-            if p.is_file() {
-                mine.push((parts.join("/").to_lowercase(), p));
-            }
+        let Some(parts) = norm_join(dir, &link) else {
+            continue;
+        };
+        if let Ok(p) = resolve(root, &parts.join("/"))
+            && p.is_file()
+        {
+            mine.push((parts.join("/").to_lowercase(), p));
         }
     }
     if mine.is_empty() {
@@ -294,9 +351,11 @@ fn unshared_owned_images(root: &Path, rel: &str) -> Vec<PathBuf> {
     }
     let referenced = referenced_elsewhere(root, &resolve(root, rel).unwrap_or_default());
     let mut seen = HashSet::new();
-    mine.into_iter().filter(|(k, _)| !referenced.contains(k) && seen.insert(k.clone())).map(|(_, p)| p).collect()
+    mine.into_iter()
+        .filter(|(k, _)| !referenced.contains(k) && seen.insert(k.clone()))
+        .map(|(_, p)| p)
+        .collect()
 }
-
 
 /// Résultat d'un renommage/déplacement réussi. `warning` : l'élément a bien changé de chemin, mais la mise à jour
 /// des liens d'images a échoué en partie (à afficher, sans annuler : l'appelant doit suivre le nouveau chemin).
@@ -308,7 +367,11 @@ pub struct Moved {
 }
 
 fn links_warning(res: Result<(), String>) -> Option<String> {
-    res.err().map(|e| format!("Déplacement effectué, mais certains liens d'images n'ont pas pu être mis à jour : {e}"))
+    res.err().map(|e| {
+        format!(
+            "Déplacement effectué, mais certains liens d'images n'ont pas pu être mis à jour : {e}"
+        )
+    })
 }
 
 pub fn rename_entry(root: &Path, rel: &str, new_name: &str) -> Result<Moved, String> {
@@ -321,13 +384,23 @@ pub fn rename_entry(root: &Path, rel: &str, new_name: &str) -> Result<Moved, Str
     }
     let is_note = src.is_file();
     let new_name = new_name.trim();
-    let stem = if is_note { strip_md(new_name) } else { new_name };
+    let stem = if is_note {
+        strip_md(new_name)
+    } else {
+        new_name
+    };
     validate_name(stem)?;
-    let final_name = if is_note { format!("{stem}.md") } else { stem.to_string() };
+    let final_name = if is_note {
+        format!("{stem}.md")
+    } else {
+        stem.to_string()
+    };
     let dst = src.with_file_name(&final_name);
     if dst != src {
         // Sous Windows, un simple changement de casse désigne le même fichier.
-        let same = src.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(&final_name));
+        let same = src
+            .file_name()
+            .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(&final_name));
         if dst.exists() && !same {
             return Err(EXISTS.into());
         }
@@ -335,13 +408,22 @@ pub fn rename_entry(root: &Path, rel: &str, new_name: &str) -> Result<Moved, Str
         if is_note {
             // Le renommage a eu lieu : un échec ici n'est qu'un avertissement (sinon l'onglet garderait l'ancien chemin).
             let warning = links_warning(follow_note(root, rel, &to_rel(root, &dst)));
-            return Ok(Moved { rel: to_rel(root, &dst), warning });
+            return Ok(Moved {
+                rel: to_rel(root, &dst),
+                warning,
+            });
         }
         // Dossier : les liens d'images qui sortent du dossier (ou y reviennent par son ancien nom) sont recalculés.
         let warning = links_warning(follow_folder(root, rel, &to_rel(root, &dst)));
-        return Ok(Moved { rel: to_rel(root, &dst), warning });
+        return Ok(Moved {
+            rel: to_rel(root, &dst),
+            warning,
+        });
     }
-    Ok(Moved { rel: to_rel(root, &dst), warning: None })
+    Ok(Moved {
+        rel: to_rel(root, &dst),
+        warning: None,
+    })
 }
 
 pub fn move_entry(root: &Path, rel: &str, dest_dir_rel: &str) -> Result<Moved, String> {
@@ -360,15 +442,27 @@ pub fn move_entry(root: &Path, rel: &str, dest_dir_rel: &str) -> Result<Moved, S
         return Err("Impossible de déplacer un dossier dans lui-même.".into());
     }
     if src.parent() == Some(dest_dir.as_path()) {
-        return Ok(Moved { rel: to_rel(root, &src), warning: None });
+        return Ok(Moved {
+            rel: to_rel(root, &src),
+            warning: None,
+        });
     }
     let (stem, ext) = if src.is_file() {
         (
-            src.file_stem().unwrap_or_default().to_string_lossy().into_owned(),
+            src.file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned(),
             src.extension().map(|e| e.to_string_lossy().into_owned()),
         )
     } else {
-        (src.file_name().unwrap_or_default().to_string_lossy().into_owned(), None)
+        (
+            src.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned(),
+            None,
+        )
     };
     let dst = unique_path(&dest_dir, &stem, ext.as_deref());
     fs::rename(&src, &dst).map_err(|e| format!("Impossible de déplacer : {e}"))?;
@@ -381,7 +475,10 @@ pub fn move_entry(root: &Path, rel: &str, dest_dir_rel: &str) -> Result<Moved, S
     } else {
         Ok(())
     };
-    Ok(Moved { rel: new_rel, warning: links_warning(follow) })
+    Ok(Moved {
+        rel: new_rel,
+        warning: links_warning(follow),
+    })
 }
 
 pub fn trash_entry(root: &Path, rel: &str) -> Result<(), String> {
@@ -392,7 +489,11 @@ pub fn trash_entry(root: &Path, rel: &str) -> Result<(), String> {
     if !p.exists() {
         return Err("L'élément à supprimer n'existe plus.".into());
     }
-    let images = if p.is_file() && is_md(&p) { unshared_owned_images(root, rel) } else { vec![] };
+    let images = if p.is_file() && is_md(&p) {
+        unshared_owned_images(root, rel)
+    } else {
+        vec![]
+    };
     trash::delete(&p).map_err(|e| format!("Impossible de mettre à la corbeille : {e}"))?;
     for img in images {
         let _ = trash::delete(&img); // au mieux : la note est déjà à la Corbeille
@@ -403,162 +504,267 @@ pub fn trash_entry(root: &Path, rel: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use std::fs;
+    use tempfile::tempdir;
 
-    #[test] fn validate_name_rejects() {
+    #[test]
+    fn validate_name_rejects() {
         for n in ["", "a?b", "CON", "con.md", "nom.", "nom ", "a/b"] {
             assert!(validate_name(n).is_err(), "{n:?} should be rejected");
         }
         assert!(validate_name(&"a".repeat(201)).is_err());
     }
-    #[test] fn validate_name_accepts() { assert!(validate_name("Réunion 24-10 ✅").is_ok()); }
-    #[test] fn create_note_suffixes_on_conflict() {
-        let d = tempdir().unwrap();
-        assert_eq!(create_note(d.path(), "", "Nouvelle note").unwrap(), "Nouvelle note.md");
-        assert_eq!(create_note(d.path(), "", "Nouvelle note").unwrap(), "Nouvelle note 2.md");
+    #[test]
+    fn validate_name_accepts() {
+        assert!(validate_name("Réunion 24-10 ✅").is_ok());
     }
-    #[test] fn rename_refuses_existing_target() {
+    #[test]
+    fn create_note_suffixes_on_conflict() {
+        let d = tempdir().unwrap();
+        assert_eq!(
+            create_note(d.path(), "", "Nouvelle note").unwrap(),
+            "Nouvelle note.md"
+        );
+        assert_eq!(
+            create_note(d.path(), "", "Nouvelle note").unwrap(),
+            "Nouvelle note 2.md"
+        );
+    }
+    #[test]
+    fn rename_refuses_existing_target() {
         let d = tempdir().unwrap();
         fs::write(d.path().join("a.md"), "").unwrap();
         fs::write(d.path().join("b.md"), "").unwrap();
-        assert_eq!(rename_entry(d.path(), "a.md", "b").unwrap_err(), "Une note ou un dossier porte déjà ce nom.");
+        assert_eq!(
+            rename_entry(d.path(), "a.md", "b").unwrap_err(),
+            "Une note ou un dossier porte déjà ce nom."
+        );
         assert_eq!(rename_entry(d.path(), "a.md", "c").unwrap().rel, "c.md");
     }
-    #[test] fn move_suffixes_on_conflict() {
+    #[test]
+    fn move_suffixes_on_conflict() {
         let d = tempdir().unwrap();
         fs::create_dir(d.path().join("D")).unwrap();
         fs::write(d.path().join("D/a.md"), "").unwrap();
         fs::write(d.path().join("a.md"), "").unwrap();
         assert_eq!(move_entry(d.path(), "a.md", "D").unwrap().rel, "D/a 2.md");
     }
-    #[test] fn move_folder_into_itself_is_refused() {
+    #[test]
+    fn move_folder_into_itself_is_refused() {
         let d = tempdir().unwrap();
         fs::create_dir_all(d.path().join("A/B")).unwrap();
         assert!(move_entry(d.path(), "A", "A/B").is_err());
         assert!(move_entry(d.path(), "A", "A").is_err());
     }
-    #[test] fn trash_entry_removes_file() {
+    #[test]
+    fn trash_entry_removes_file() {
         let d = tempdir().unwrap();
         fs::write(d.path().join("t.md"), "x").unwrap();
         trash_entry(d.path(), "t.md").unwrap();
         assert!(!d.path().join("t.md").exists());
     }
-    fn md_with(root: &std::path::Path, rel: &str, c: &str) { let p = root.join(rel); fs::create_dir_all(p.parent().unwrap()).unwrap(); fs::write(p, c).unwrap(); }
-    #[test] fn rename_note_renames_owned_images() {
-        let d = tempdir().unwrap(); let r = d.path();
+    fn md_with(root: &std::path::Path, rel: &str, c: &str) {
+        let p = root.join(rel);
+        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::write(p, c).unwrap();
+    }
+    #[test]
+    fn rename_note_renames_owned_images() {
+        let d = tempdir().unwrap();
+        let r = d.path();
         md_with(r, "n.md", "![](images/n-2026-10-24-1.png)");
         md_with(r, "images/n-2026-10-24-1.png", "img");
         assert_eq!(rename_entry(r, "n.md", "m").unwrap().rel, "m.md");
         assert!(r.join("images/m-2026-10-24-1.png").is_file());
         assert!(!r.join("images/n-2026-10-24-1.png").exists());
-        assert_eq!(fs::read_to_string(r.join("m.md")).unwrap(), "![](images/m-2026-10-24-1.png)");
+        assert_eq!(
+            fs::read_to_string(r.join("m.md")).unwrap(),
+            "![](images/m-2026-10-24-1.png)"
+        );
     }
-    #[test] fn move_note_carries_images_and_fixes_other_links() {
-        let d = tempdir().unwrap(); let r = d.path();
-        md_with(r, "A/n.md", "![](images/n-2026-10-24-1.png)
-![](../shared/s.png)");
+    #[test]
+    fn move_note_carries_images_and_fixes_other_links() {
+        let d = tempdir().unwrap();
+        let r = d.path();
+        md_with(
+            r,
+            "A/n.md",
+            "![](images/n-2026-10-24-1.png)
+![](../shared/s.png)",
+        );
         md_with(r, "A/images/n-2026-10-24-1.png", "img");
         md_with(r, "shared/s.png", "s");
         fs::create_dir_all(r.join("B/C")).unwrap();
         assert_eq!(move_entry(r, "A/n.md", "B/C").unwrap().rel, "B/C/n.md");
         assert!(r.join("B/C/images/n-2026-10-24-1.png").is_file());
         assert!(!r.join("A/images/n-2026-10-24-1.png").exists());
-        assert_eq!(fs::read_to_string(r.join("B/C/n.md")).unwrap(), "![](images/n-2026-10-24-1.png)
-![](../../shared/s.png)");
+        assert_eq!(
+            fs::read_to_string(r.join("B/C/n.md")).unwrap(),
+            "![](images/n-2026-10-24-1.png)
+![](../../shared/s.png)"
+        );
     }
-    #[test] fn move_never_overwrites_existing_image() {
-        let d = tempdir().unwrap(); let r = d.path();
+    #[test]
+    fn move_never_overwrites_existing_image() {
+        let d = tempdir().unwrap();
+        let r = d.path();
         md_with(r, "A/n.md", "![](images/n-1.png)");
         md_with(r, "A/images/n-1.png", "mine");
         md_with(r, "B/images/n-1.png", "other");
         move_entry(r, "A/n.md", "B").unwrap();
-        assert_eq!(fs::read_to_string(r.join("B/images/n-1.png")).unwrap(), "other");
-        assert_eq!(fs::read_to_string(r.join("B/images/n-1 2.png")).unwrap(), "mine");
-        assert_eq!(fs::read_to_string(r.join("B/n.md")).unwrap(), "![](images/n-1 2.png)");
+        assert_eq!(
+            fs::read_to_string(r.join("B/images/n-1.png")).unwrap(),
+            "other"
+        );
+        assert_eq!(
+            fs::read_to_string(r.join("B/images/n-1 2.png")).unwrap(),
+            "mine"
+        );
+        assert_eq!(
+            fs::read_to_string(r.join("B/n.md")).unwrap(),
+            "![](images/n-1 2.png)"
+        );
     }
-    #[test] fn trash_note_keeps_shared_image() {
-        let d = tempdir().unwrap(); let r = d.path();
+    #[test]
+    fn trash_note_keeps_shared_image() {
+        let d = tempdir().unwrap();
+        let r = d.path();
         md_with(r, "n.md", "![](images/n-2026-10-24-1.png)");
         md_with(r, "o.md", "![](images/n-2026-10-24-1.png)");
         md_with(r, "images/n-2026-10-24-1.png", "img");
         trash_entry(r, "n.md").unwrap();
         assert!(r.join("images/n-2026-10-24-1.png").is_file());
     }
-    #[test] fn trash_note_trashes_unshared_images() {
-        let d = tempdir().unwrap(); let r = d.path();
+    #[test]
+    fn trash_note_trashes_unshared_images() {
+        let d = tempdir().unwrap();
+        let r = d.path();
         md_with(r, "n.md", "![](images/n-1.png)");
         md_with(r, "images/n-1.png", "img");
         trash_entry(r, "n.md").unwrap();
         assert!(!r.join("images/n-1.png").exists());
     }
-    #[test] fn move_without_links_does_not_rewrite() {
-        let d = tempdir().unwrap(); let r = d.path();
-        md_with(r, "n.md", "# rien
+    #[test]
+    fn move_without_links_does_not_rewrite() {
+        let d = tempdir().unwrap();
+        let r = d.path();
+        md_with(
+            r,
+            "n.md",
+            "# rien
 sans image
-");
+",
+        );
         fs::create_dir(r.join("D")).unwrap();
         let before = fs::metadata(r.join("n.md")).unwrap().modified().unwrap();
         std::thread::sleep(std::time::Duration::from_millis(50));
         move_entry(r, "n.md", "D").unwrap();
-        assert_eq!(fs::metadata(r.join("D/n.md")).unwrap().modified().unwrap(), before);
+        assert_eq!(
+            fs::metadata(r.join("D/n.md")).unwrap().modified().unwrap(),
+            before
+        );
     }
-    #[test] fn move_folder_keeps_images_inside() {
-        let d = tempdir().unwrap(); let r = d.path();
+    #[test]
+    fn move_folder_keeps_images_inside() {
+        let d = tempdir().unwrap();
+        let r = d.path();
         md_with(r, "A/n.md", "![](images/n-1.png)");
         md_with(r, "A/images/n-1.png", "img");
         fs::create_dir(r.join("B")).unwrap();
         move_entry(r, "A", "B").unwrap();
         assert!(r.join("B/A/images/n-1.png").is_file());
-        assert_eq!(fs::read_to_string(r.join("B/A/n.md")).unwrap(), "![](images/n-1.png)");
+        assert_eq!(
+            fs::read_to_string(r.join("B/A/n.md")).unwrap(),
+            "![](images/n-1.png)"
+        );
     }
-    #[test] fn move_folder_rewrites_links_pointing_outside() {
-        let d = tempdir().unwrap(); let r = d.path();
+    #[test]
+    fn move_folder_rewrites_links_pointing_outside() {
+        let d = tempdir().unwrap();
+        let r = d.path();
         md_with(r, "shared/s.png", "s");
         md_with(r, "A/images/n-1.png", "img");
         md_with(r, "A/sub/x.png", "x");
-        md_with(r, "A/n.md", "![](../shared/s.png)\n![](images/n-1.png)\n![](sub/x.png)\n![](https://a.b/c.png)\n");
+        md_with(
+            r,
+            "A/n.md",
+            "![](../shared/s.png)\n![](images/n-1.png)\n![](sub/x.png)\n![](https://a.b/c.png)\n",
+        );
         md_with(r, "A/sub/deep.md", "![](../../shared/s.png) ![](x.png)\n");
         md_with(r, "A/plain.md", "rien\n");
         fs::create_dir(r.join("B")).unwrap();
-        let plain_before = fs::metadata(r.join("A/plain.md")).unwrap().modified().unwrap();
+        let plain_before = fs::metadata(r.join("A/plain.md"))
+            .unwrap()
+            .modified()
+            .unwrap();
         std::thread::sleep(std::time::Duration::from_millis(30));
         move_entry(r, "A", "B").unwrap();
         assert_eq!(
             fs::read_to_string(r.join("B/A/n.md")).unwrap(),
             "![](../../shared/s.png)\n![](images/n-1.png)\n![](sub/x.png)\n![](https://a.b/c.png)\n"
         );
-        assert_eq!(fs::read_to_string(r.join("B/A/sub/deep.md")).unwrap(), "![](../../../shared/s.png) ![](x.png)\n");
-        assert_eq!(fs::metadata(r.join("B/A/plain.md")).unwrap().modified().unwrap(), plain_before);
+        assert_eq!(
+            fs::read_to_string(r.join("B/A/sub/deep.md")).unwrap(),
+            "![](../../../shared/s.png) ![](x.png)\n"
+        );
+        assert_eq!(
+            fs::metadata(r.join("B/A/plain.md"))
+                .unwrap()
+                .modified()
+                .unwrap(),
+            plain_before
+        );
         // Retour à la racine : les liens redeviennent ceux d'origine.
         move_entry(r, "B/A", "").unwrap();
-        assert_eq!(fs::read_to_string(r.join("A/sub/deep.md")).unwrap(), "![](../../shared/s.png) ![](x.png)\n");
+        assert_eq!(
+            fs::read_to_string(r.join("A/sub/deep.md")).unwrap(),
+            "![](../../shared/s.png) ![](x.png)\n"
+        );
     }
-    #[test] fn rename_folder_rewrites_links_pointing_outside() {
-        let d = tempdir().unwrap(); let r = d.path();
+    #[test]
+    fn rename_folder_rewrites_links_pointing_outside() {
+        let d = tempdir().unwrap();
+        let r = d.path();
         md_with(r, "shared/s.png", "s");
         md_with(r, "A/n.md", "![](../shared/s.png)");
         rename_entry(r, "A", "B").unwrap();
-        assert_eq!(fs::read_to_string(r.join("B/n.md")).unwrap(), "![](../shared/s.png)");
-        let d = tempdir().unwrap(); let r = d.path();
+        assert_eq!(
+            fs::read_to_string(r.join("B/n.md")).unwrap(),
+            "![](../shared/s.png)"
+        );
+        let d = tempdir().unwrap();
+        let r = d.path();
         md_with(r, "A/x.png", "x");
         md_with(r, "A/n.md", "![](../A/x.png)");
         rename_entry(r, "A", "B").unwrap();
-        assert_eq!(fs::read_to_string(r.join("B/n.md")).unwrap(), "![](../B/x.png)");
+        assert_eq!(
+            fs::read_to_string(r.join("B/n.md")).unwrap(),
+            "![](../B/x.png)"
+        );
     }
-    #[test] fn rename_folder_nested_same_name_and_valid_inner_links() {
-        let d = tempdir().unwrap(); let r = d.path();
+    #[test]
+    fn rename_folder_nested_same_name_and_valid_inner_links() {
+        let d = tempdir().unwrap();
+        let r = d.path();
         md_with(r, "A/A/x.png", "x");
         md_with(r, "A/A/n.md", "![](../A/x.png)");
         md_with(r, "A/m.md", "![](../A/A/x.png)");
         rename_entry(r, "A", "B").unwrap();
         // Cible déplacée avec le dossier : lien toujours valide, inchangé.
-        assert_eq!(fs::read_to_string(r.join("B/A/n.md")).unwrap(), "![](../A/x.png)");
-        assert_eq!(fs::read_to_string(r.join("B/m.md")).unwrap(), "![](../B/A/x.png)");
+        assert_eq!(
+            fs::read_to_string(r.join("B/A/n.md")).unwrap(),
+            "![](../A/x.png)"
+        );
+        assert_eq!(
+            fs::read_to_string(r.join("B/m.md")).unwrap(),
+            "![](../B/A/x.png)"
+        );
     }
-    #[test] fn rename_and_move_succeed_with_warning_when_links_cannot_follow() {
+    #[test]
+    fn rename_and_move_succeed_with_warning_when_links_cannot_follow() {
         // Note illisible (Latin-1) : le renommage a lieu, la mise à jour des liens échoue → Ok + avertissement.
-        let d = tempdir().unwrap(); let r = d.path();
+        let d = tempdir().unwrap();
+        let r = d.path();
         fs::write(r.join("n.md"), [0xC9u8, b'\n']).unwrap();
         fs::create_dir(r.join("D")).unwrap();
         let res = rename_entry(r, "n.md", "m");
@@ -574,16 +780,26 @@ sans image
         assert!(res.warning.is_some());
         assert!(r.join("D/m.md").is_file());
     }
-    #[test] fn rename_note_with_spaces_slugs_images() {
-        let d = tempdir().unwrap(); let r = d.path();
+    #[test]
+    fn rename_note_with_spaces_slugs_images() {
+        let d = tempdir().unwrap();
+        let r = d.path();
         md_with(r, "Ma note.md", "![](images/Ma-note-2026-10-24-1.png)");
         md_with(r, "images/Ma-note-2026-10-24-1.png", "img");
-        assert_eq!(rename_entry(r, "Ma note.md", "Autre note").unwrap().rel, "Autre note.md");
+        assert_eq!(
+            rename_entry(r, "Ma note.md", "Autre note").unwrap().rel,
+            "Autre note.md"
+        );
         assert!(r.join("images/Autre-note-2026-10-24-1.png").is_file());
-        assert_eq!(fs::read_to_string(r.join("Autre note.md")).unwrap(), "![](images/Autre-note-2026-10-24-1.png)");
+        assert_eq!(
+            fs::read_to_string(r.join("Autre note.md")).unwrap(),
+            "![](images/Autre-note-2026-10-24-1.png)"
+        );
     }
-    #[test] fn move_copies_image_shared_with_other_note() {
-        let d = tempdir().unwrap(); let r = d.path();
+    #[test]
+    fn move_copies_image_shared_with_other_note() {
+        let d = tempdir().unwrap();
+        let r = d.path();
         md_with(r, "n.md", "![](images/n-1.png)");
         md_with(r, "o.md", "![](images/n-1.png)");
         md_with(r, "images/n-1.png", "img");
@@ -591,24 +807,39 @@ sans image
         move_entry(r, "n.md", "B").unwrap();
         assert!(r.join("B/images/n-1.png").is_file());
         assert!(r.join("images/n-1.png").is_file());
-        assert_eq!(fs::read_to_string(r.join("o.md")).unwrap(), "![](images/n-1.png)");
-        assert_eq!(fs::read_to_string(r.join("B/n.md")).unwrap(), "![](images/n-1.png)");
+        assert_eq!(
+            fs::read_to_string(r.join("o.md")).unwrap(),
+            "![](images/n-1.png)"
+        );
+        assert_eq!(
+            fs::read_to_string(r.join("B/n.md")).unwrap(),
+            "![](images/n-1.png)"
+        );
     }
     #[cfg(windows)]
-    #[test] fn partial_failure_still_rewrites_moved_links() {
+    #[test]
+    fn partial_failure_still_rewrites_moved_links() {
         use std::os::windows::fs::OpenOptionsExt;
-        let d = tempdir().unwrap(); let r = d.path();
+        let d = tempdir().unwrap();
+        let r = d.path();
         md_with(r, "n.md", "![](images/n-1.png) ![](images/n-2.png)");
         md_with(r, "images/n-1.png", "a");
         md_with(r, "images/n-2.png", "b");
         fs::create_dir(r.join("B")).unwrap();
         // Verrou sans partage de suppression sur la 2e image : son déplacement échoue.
-        let _lock = fs::OpenOptions::new().read(true).share_mode(1).open(r.join("images/n-2.png")).unwrap();
+        let _lock = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1)
+            .open(r.join("images/n-2.png"))
+            .unwrap();
         // Le déplacement a eu lieu : Ok avec un avertissement (revue finale #6), pas une erreur.
         let moved = move_entry(r, "n.md", "B").unwrap();
         assert_eq!(moved.rel, "B/n.md");
         assert!(moved.warning.is_some());
-        assert_eq!(fs::read_to_string(r.join("B/n.md")).unwrap(), "![](images/n-1.png) ![](images/n-2.png)");
+        assert_eq!(
+            fs::read_to_string(r.join("B/n.md")).unwrap(),
+            "![](images/n-1.png) ![](images/n-2.png)"
+        );
         assert!(r.join("B/images/n-1.png").is_file());
     }
 }

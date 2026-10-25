@@ -25,7 +25,11 @@ fn mark_ready() {
     println!("startup_ms={ms}");
     let _ = std::io::stdout().flush();
     let log = std::env::temp_dir().join("mymdnotepad-startup.log");
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(log) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log)
+    {
         let _ = writeln!(f, "startup_ms={ms}");
     }
 }
@@ -72,7 +76,11 @@ pub fn run() {
             let location = settings::resolve_location(&exe_dir, &appdata);
             settings::migrate_legacy(&location.path, &exe_dir, &appdata);
             let loaded = settings::load(&location.path);
-            if let Some(r) = loaded.root_dir.as_deref().filter(|r| std::path::Path::new(r).is_dir()) {
+            if let Some(r) = loaded
+                .root_dir
+                .as_deref()
+                .filter(|r| std::path::Path::new(r).is_dir())
+            {
                 let _ = app.asset_protocol_scope().allow_directory(r, true);
             }
             let root_for_watch = loaded.root_dir.clone();
@@ -84,7 +92,8 @@ pub fn run() {
             });
             if let Some(r) = root_for_watch {
                 let handle = app.handle().clone();
-                app.state::<AppState>().restart_watcher(&handle, std::path::Path::new(&r));
+                app.state::<AppState>()
+                    .restart_watcher(&handle, std::path::Path::new(&r));
             }
 
             accent::install(app.handle());

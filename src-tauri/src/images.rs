@@ -10,12 +10,14 @@ const ALLOWED_EXT: [&str; 5] = ["png", "jpg", "jpeg", "gif", "webp"];
 
 fn img_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r#"!\[[^\]]*\]\(\s*<?([^)\s>]+)>?(\s+"[^"]*")?\s*\)"#).expect("regex valide"))
+    RE.get_or_init(|| {
+        Regex::new(r#"!\[[^\]]*\]\(\s*<?([^)\s>]+)>?(\s+"[^"]*")?\s*\)"#).expect("regex valide")
+    })
 }
 
 /// Vrai pour une cible relative (ni URL, ni lecteur Windows, ni chemin absolu).
 pub fn is_relative_target(t: &str) -> bool {
-    if t.is_empty() || t.starts_with('/') || t.starts_with('\\')|| t.starts_with('#') {
+    if t.is_empty() || t.starts_with('/') || t.starts_with('\\') || t.starts_with('#') {
         return false;
     }
     // Schéma (`http:`, `data:`…) ou lecteur (`C:`) : un « : » avant tout « / ».
@@ -72,7 +74,11 @@ pub fn slug(stem: &str) -> String {
 
 pub fn owned_images(note_stem: &str, links: &[String]) -> Vec<String> {
     let prefix = format!("images/{}-", slug(note_stem));
-    links.iter().filter(|l| l.starts_with(&prefix)).cloned().collect()
+    links
+        .iter()
+        .filter(|l| l.starts_with(&prefix))
+        .cloned()
+        .collect()
 }
 
 /// Normalise `dir_rel/link` sans accès au disque ; `None` si le résultat sort de la racine.
@@ -93,7 +99,11 @@ pub fn norm_join(dir_rel: &str, link: &str) -> Option<Vec<String>> {
 /// Lien relatif depuis `from_dir` (relatif à la racine) vers `target` (relatif à la racine).
 pub fn rel_between(from_dir: &str, target: &[String]) -> String {
     let from: Vec<&str> = from_dir.split('/').filter(|s| !s.is_empty()).collect();
-    let common = from.iter().zip(target.iter()).take_while(|(a, b)| a == &&b.as_str()).count();
+    let common = from
+        .iter()
+        .zip(target.iter())
+        .take_while(|(a, b)| a == &&b.as_str())
+        .count();
     let mut out: Vec<String> = vec!["..".into(); from.len() - common];
     out.extend(target[common..].iter().cloned());
     out.join("/")
@@ -108,13 +118,24 @@ fn note_parts(note_rel: &str) -> (&str, &str) {
     (dir, file.rsplit_once('.').map_or(file, |(s, _)| s))
 }
 
-fn store(root: &Path, note_rel: &str, ext: &str, date: &str, mut write: impl FnMut(&mut fs::File) -> std::io::Result<()>) -> Result<String, String> {
+fn store(
+    root: &Path,
+    note_rel: &str,
+    ext: &str,
+    date: &str,
+    mut write: impl FnMut(&mut fs::File) -> std::io::Result<()>,
+) -> Result<String, String> {
     let (dir_rel, stem) = note_parts(note_rel);
     let images = resolve(root, dir_rel)?.join("images");
-    fs::create_dir_all(&images).map_err(|e| format!("Impossible de créer le dossier des images : {e}"))?;
+    fs::create_dir_all(&images)
+        .map_err(|e| format!("Impossible de créer le dossier des images : {e}"))?;
     for n in 1u32.. {
         let name = format!("{}-{date}-{n}.{ext}", slug(stem));
-        match fs::OpenOptions::new().write(true).create_new(true).open(images.join(&name)) {
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(images.join(&name))
+        {
             Ok(mut f) => {
                 let res = write(&mut f).and_then(|_| f.sync_all());
                 if let Err(e) = res {
@@ -141,26 +162,36 @@ fn check_ext(ext: &str) -> Result<(), String> {
 
 pub fn save_image(root: &Path, note_rel: &str, bytes: &[u8], ext: &str) -> Result<String, String> {
     check_ext(ext)?;
-    store(root, note_rel, &ext.to_ascii_lowercase(), &today(), |f| f.write_all(bytes))
+    store(root, note_rel, &ext.to_ascii_lowercase(), &today(), |f| {
+        f.write_all(bytes)
+    })
 }
 
 pub fn import_image(root: &Path, note_rel: &str, src_abs: &str) -> Result<String, String> {
     let src = Path::new(src_abs);
-    let ext = src.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
+    let ext = src
+        .extension()
+        .map(|e| e.to_string_lossy().into_owned())
+        .unwrap_or_default();
     check_ext(&ext)?;
     let mut input = fs::File::open(src).map_err(|e| format!("Impossible de lire l'image : {e}"))?;
-    store(root, note_rel, &ext, &today(), |f| std::io::copy(&mut input, f).map(|_| ()))
+    store(root, note_rel, &ext, &today(), |f| {
+        std::io::copy(&mut input, f).map(|_| ())
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use std::fs;
+    use tempfile::tempdir;
 
-    fn today() -> String { chrono::Local::now().format("%Y-%m-%d").to_string() }
+    fn today() -> String {
+        chrono::Local::now().format("%Y-%m-%d").to_string()
+    }
 
-    #[test] fn save_image_names_sequentially() {
+    #[test]
+    fn save_image_names_sequentially() {
         let d = tempdir().unwrap();
         fs::create_dir(d.path().join("Projets")).unwrap();
         fs::write(d.path().join("Projets/MDnote.md"), "").unwrap();
@@ -171,11 +202,13 @@ mod tests {
         assert!(d.path().join("Projets").join(&a).is_file());
         assert!(d.path().join("Projets").join(&b).is_file());
     }
-    #[test] fn save_image_rejects_bad_ext() {
+    #[test]
+    fn save_image_rejects_bad_ext() {
         let d = tempdir().unwrap();
         assert!(save_image(d.path(), "n.md", b"1", "exe").is_err());
     }
-    #[test] fn import_image_copies_keeping_ext() {
+    #[test]
+    fn import_image_copies_keeping_ext() {
         let d = tempdir().unwrap();
         let src = d.path().join("photo.JPG");
         fs::write(&src, b"abc").unwrap();
@@ -184,20 +217,33 @@ mod tests {
         assert_eq!(fs::read(d.path().join(&l)).unwrap(), b"abc");
         assert!(src.exists());
     }
-    #[test] fn rewrite_only_touches_targets() {
-        let out = rewrite_image_links("a ![x](images/n-1.png) b [lien](images/n-1.png)", |_| Some("images/m-1.png".into()));
+    #[test]
+    fn rewrite_only_touches_targets() {
+        let out = rewrite_image_links("a ![x](images/n-1.png) b [lien](images/n-1.png)", |_| {
+            Some("images/m-1.png".into())
+        });
         assert_eq!(out, "a ![x](images/m-1.png) b [lien](images/n-1.png)");
     }
-    #[test] fn image_links_skips_urls() {
-        assert_eq!(image_links("![](https://x/y.png) ![](images/a.png) ![](C:/a.png)"), ["images/a.png"]);
+    #[test]
+    fn image_links_skips_urls() {
+        assert_eq!(
+            image_links("![](https://x/y.png) ![](images/a.png) ![](C:/a.png)"),
+            ["images/a.png"]
+        );
     }
-    #[test] fn save_image_slugs_spaces() {
+    #[test]
+    fn save_image_slugs_spaces() {
         let d = tempdir().unwrap();
         let l = save_image(d.path(), "Ma note.md", b"1", "png").unwrap();
         assert_eq!(l, format!("images/Ma-note-{}-1.png", today()));
     }
-    #[test] fn owned_images_filters_by_stem() {
-        let l = vec!["images/n-1.png".to_string(), "images/other-1.png".into(), "../images/n-2.png".into()];
+    #[test]
+    fn owned_images_filters_by_stem() {
+        let l = vec![
+            "images/n-1.png".to_string(),
+            "images/other-1.png".into(),
+            "../images/n-2.png".into(),
+        ];
         assert_eq!(owned_images("n", &l), ["images/n-1.png"]);
     }
 }

@@ -4,7 +4,11 @@ use window_vibrancy::apply_acrylic;
 /// Alpha du voile acrylique pour une transparence 0 (opaque) … 100 (transparent) ; 50 = rendu historique (160).
 pub fn alpha_for(transparency: u8) -> u8 {
     let t = transparency.min(100) as f32;
-    let a = if t <= 50.0 { 255.0 - t * 1.9 } else { 160.0 - (t - 50.0) * 2.4 };
+    let a = if t <= 50.0 {
+        255.0 - t * 1.9
+    } else {
+        160.0 - (t - 50.0) * 2.4
+    };
     a.round() as u8
 }
 
@@ -23,7 +27,8 @@ pub fn apply_transparency(app: &AppHandle, transparency: u8) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test] fn alpha_mapping_is_monotonic_and_anchored() {
+    #[test]
+    fn alpha_mapping_is_monotonic_and_anchored() {
         assert_eq!(alpha_for(0), 255);
         assert_eq!(alpha_for(50), 160);
         assert_eq!(alpha_for(100), 40);

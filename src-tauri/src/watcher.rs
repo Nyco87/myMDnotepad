@@ -1,6 +1,6 @@
 //! Surveillance du dossier de notes : émet `fs-changed` (chemins relatifs) vers le front.
 use notify_debouncer_mini::notify::{RecommendedWatcher, RecursiveMode};
-use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
+use notify_debouncer_mini::{DebounceEventResult, Debouncer, new_debouncer};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -27,8 +27,13 @@ pub fn relevant_paths(root: &Path, paths: &[PathBuf]) -> Vec<String> {
         if is_tmp(p) {
             continue;
         }
-        let Ok(rel) = p.strip_prefix(root) else { continue };
-        let parts: Vec<String> = rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
+        let Ok(rel) = p.strip_prefix(root) else {
+            continue;
+        };
+        let parts: Vec<String> = rel
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            .collect();
         if parts.is_empty() {
             continue;
         }
@@ -43,15 +48,18 @@ pub fn relevant_paths(root: &Path, paths: &[PathBuf]) -> Vec<String> {
 /// Démarre la surveillance récursive de `root` (anti-rebond 250 ms).
 pub fn start(app: AppHandle, root: PathBuf) -> Result<Watcher, String> {
     let base = root.clone();
-    let mut debouncer = new_debouncer(Duration::from_millis(250), move |res: DebounceEventResult| {
-        if let Ok(events) = res {
-            let paths: Vec<PathBuf> = events.into_iter().map(|e| e.path).collect();
-            let rel = relevant_paths(&base, &paths);
-            if !rel.is_empty() {
-                let _ = app.emit("fs-changed", FsChanged { paths: rel });
+    let mut debouncer = new_debouncer(
+        Duration::from_millis(250),
+        move |res: DebounceEventResult| {
+            if let Ok(events) = res {
+                let paths: Vec<PathBuf> = events.into_iter().map(|e| e.path).collect();
+                let rel = relevant_paths(&base, &paths);
+                if !rel.is_empty() {
+                    let _ = app.emit("fs-changed", FsChanged { paths: rel });
+                }
             }
-        }
-    })
+        },
+    )
     .map_err(|e| format!("Impossible de surveiller le dossier : {e}"))?;
     debouncer
         .watcher()
@@ -71,20 +79,34 @@ mod tests {
     #[test]
     fn ignores_mdnote_tmp_files() {
         let r = root();
-        let got = relevant_paths(&r, &[r.join(".Courses.md.tmp"), r.join("a").join(".x.tmp"), r.join("a").join("b.md")]);
+        let got = relevant_paths(
+            &r,
+            &[
+                r.join(".Courses.md.tmp"),
+                r.join("a").join(".x.tmp"),
+                r.join("a").join("b.md"),
+            ],
+        );
         assert_eq!(got, vec!["a/b.md".to_string()]);
     }
 
     #[test]
     fn keeps_user_files_ending_in_tmp_without_dot_prefix() {
         let r = root();
-        assert_eq!(relevant_paths(&r, &[r.join("x.tmp")]), vec!["x.tmp".to_string()]);
+        assert_eq!(
+            relevant_paths(&r, &[r.join("x.tmp")]),
+            vec!["x.tmp".to_string()]
+        );
     }
 
     #[test]
     fn drops_paths_outside_root_and_root_itself() {
         let r = root();
-        let other = if cfg!(windows) { PathBuf::from(r"C:\other\a.md") } else { PathBuf::from("/other/a.md") };
+        let other = if cfg!(windows) {
+            PathBuf::from(r"C:\other\a.md")
+        } else {
+            PathBuf::from("/other/a.md")
+        };
         assert!(relevant_paths(&r, &[other, r.clone()]).is_empty());
     }
 
@@ -92,6 +114,9 @@ mod tests {
     fn uses_forward_slashes_and_dedups() {
         let r = root();
         let p = r.join("Projets").join("MDnote").join("n.md");
-        assert_eq!(relevant_paths(&r, &[p.clone(), p]), vec!["Projets/MDnote/n.md".to_string()]);
+        assert_eq!(
+            relevant_paths(&r, &[p.clone(), p]),
+            vec!["Projets/MDnote/n.md".to_string()]
+        );
     }
 }
