@@ -41,6 +41,12 @@ pub fn run() {
             accent::get_accent_color,
             settings::get_settings,
             settings::save_settings,
+            settings::get_settings_location,
+            settings::move_settings,
+            settings::check_settings_file,
+            settings::load_settings_file,
+            settings::set_transparency,
+            settings::open_in_explorer,
             settings::set_root,
             settings::root_status,
             commands::list_tree,
@@ -62,15 +68,16 @@ pub fn run() {
             let appdata = std::env::var_os("APPDATA")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| exe_dir.clone());
-            let settings_path = settings::settings_path(&exe_dir, &appdata);
-            settings::migrate_legacy(&settings_path, &exe_dir, &appdata);
-            let loaded = settings::load(&settings_path);
+            let location = settings::resolve_location(&exe_dir, &appdata);
+            settings::migrate_legacy(&location.path, &exe_dir, &appdata);
+            let loaded = settings::load(&location.path);
             if let Some(r) = loaded.root_dir.as_deref().filter(|r| std::path::Path::new(r).is_dir()) {
                 let _ = app.asset_protocol_scope().allow_directory(r, true);
             }
             let root_for_watch = loaded.root_dir.clone();
+            let transparency = loaded.transparency;
             app.manage(AppState {
-                settings_path,
+                location: Mutex::new(location),
                 settings: Mutex::new(loaded),
                 watcher: Mutex::new(None),
             });
@@ -85,7 +92,7 @@ pub fn run() {
                 .get_webview_window("main")
                 .ok_or("fenêtre principale introuvable")?;
             // Ne jamais interrompre le démarrage à cause de l'effet de fenêtre.
-            let _ = window_fx::apply_acrylic_effect(&window);
+            let _ = window_fx::apply_acrylic_effect(&window, transparency);
             window.show()?;
             Ok(())
         })
