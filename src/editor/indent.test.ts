@@ -61,3 +61,38 @@ describe("list indentation", () => {
     }
   });
 });
+
+describe("mixed nesting acts on the innermost item", () => {
+  it("task_in_bullet_sinks_and_lifts_within_its_own_list", () => {
+    const ed = makeEditor("- a\n- b\n  - [ ] c\n  - [ ] d\n");
+    cursorIn(ed, "d");
+    pressKey(ed.view, "Tab");
+    expect(ed.getMarkdown()).toBe("- a\n- b\n  - [ ] c\n    - [ ] d\n");
+    pressKey(ed.view, "Tab", { shift: true });
+    expect(ed.getMarkdown()).toBe("- a\n- b\n  - [ ] c\n  - [ ] d\n");
+  });
+
+  it("first_task_in_bullet_does_not_indent_the_outer_item", () => {
+    const ed = makeEditor("- a\n- b\n  - [ ] c\n");
+    cursorIn(ed, "c");
+    expect(pressKey(ed.view, "Tab")).toBe(true);
+    expect(ed.getMarkdown()).toBe("- a\n- b\n  - [ ] c\n");
+  });
+
+  it("bullet_in_task_sinks_and_lifts_within_its_own_list", () => {
+    const ed = makeEditor("- [ ] a\n  - b\n  - c\n");
+    cursorIn(ed, "c");
+    pressKey(ed.view, "Tab");
+    expect(ed.getMarkdown()).toBe("- [ ] a\n  - b\n    - c\n");
+    pressKey(ed.view, "Tab", { shift: true });
+    expect(ed.getMarkdown()).toBe("- [ ] a\n  - b\n  - c\n");
+  });
+
+  it("tab_in_a_code_block_inside_a_list_item_does_not_indent", () => {
+    const ed = makeEditor("- a\n- b\n\n  ```\n  x\n  ```\n");
+    cursorIn(ed, "x");
+    const before = ed.getMarkdown();
+    expect(pressKey(ed.view, "Tab")).toBe(false);
+    expect(ed.getMarkdown()).toBe(before);
+  });
+});

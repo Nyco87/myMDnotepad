@@ -80,8 +80,12 @@ pub fn migrate_legacy(path: &Path, exe_dir: &Path, appdata: &Path) -> bool {
         exe_dir.join(LEGACY_FILE_NAME),
         appdata.join(LEGACY_APPDATA_DIR).join(LEGACY_FILE_NAME),
     ];
-    match candidates.iter().find(|p| p.is_file()) {
-        Some(old) => save(path, &load(old)).is_ok(),
+    // Le premier ancien fichier lisible gagne ; un fichier illisible laisse la chance au suivant.
+    let parsed = candidates.iter().find_map(|p| {
+        std::fs::read_to_string(p).ok().and_then(|t| serde_json::from_str::<Settings>(&t).ok())
+    });
+    match parsed {
+        Some(s) => save(path, &s).is_ok(),
         None => false,
     }
 }
@@ -208,6 +212,14 @@ mod tests {
         assert_eq!(s.root_dir.as_deref(), Some("C:/n"));
         assert_eq!(s.open_tabs, vec!["a.md".to_string()]);
         assert!(o.exists());
+    }
+    #[test] fn corrupt_first_candidate_falls_through_to_the_next() {
+        let e = tempdir().unwrap(); let a = tempdir().unwrap();
+        std::fs::write(e.path().join("mdnote.settings.json"), "{ pas du json").unwrap();
+        old(&a.path().join("MDnote"), "C:/ok");
+        let new = e.path().join("mymdnotepad.settings.json");
+        assert!(migrate_legacy(&new, e.path(), a.path()));
+        assert_eq!(load(&new).root_dir.as_deref(), Some("C:/ok"));
     }
     #[test] fn migrates_appdata_file() {
         let e = tempdir().unwrap(); let a = tempdir().unwrap();

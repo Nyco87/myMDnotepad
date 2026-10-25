@@ -9,7 +9,7 @@ import {
 } from "prosemirror-commands";
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
 import { NodeSelection, Selection, TextSelection, type Command, type Plugin } from "prosemirror-state";
-import type { Schema } from "prosemirror-model";
+import type { NodeType, Schema } from "prosemirror-model";
 import { schema as defaultSchema } from "../markdown/schema";
 import { deleteWholeSelectedTable, tabNextCell, tabPrevCell } from "./tables";
 
@@ -96,29 +96,32 @@ export function insertLink(href: string): Command {
 /* Indentation of list items (bullet, numbered and task lists)          */
 /* ------------------------------------------------------------------ */
 
-function inListItem(state: import("prosemirror-state").EditorState): boolean {
+/** Innermost list_item / task_item around the cursor: that is the item Tab acts on, whatever the outer lists are. */
+function innermostItem(state: import("prosemirror-state").EditorState): NodeType | null {
   const { list_item, task_item } = state.schema.nodes;
   const { $from } = state.selection;
   for (let d = $from.depth; d >= 1; d--) {
     const t = $from.node(d).type;
-    if (t === list_item || t === task_item) return true;
+    if (t === list_item || t === task_item) return t;
   }
-  return false;
+  return null;
 }
 
 /** Applicable: the item can be nested under its previous sibling. */
 export const indentListItem: Command = (state, dispatch, view) => {
-  const { list_item, task_item } = state.schema.nodes;
-  return sinkListItem(task_item)(state, dispatch, view) || sinkListItem(list_item)(state, dispatch, view);
+  const item = innermostItem(state);
+  return item ? sinkListItem(item)(state, dispatch, view) : false;
 };
 
 /** Applicable: the item can move out one level (a top-level item leaves the list). */
 export const outdentListItem: Command = (state, dispatch, view) => {
-  const { list_item, task_item } = state.schema.nodes;
-  return liftListItem(task_item)(state, dispatch, view) || liftListItem(list_item)(state, dispatch, view);
+  const item = innermostItem(state);
+  return item ? liftListItem(item)(state, dispatch, view) : false;
 };
 
 /** Tab in a list: indent; swallowed even when impossible (first item) so focus never leaves the editor. */
+const inListItem = (state: import("prosemirror-state").EditorState): boolean =>
+  innermostItem(state) !== null && !state.selection.$from.parent.type.spec.code;
 const tabInList: Command = (state, dispatch, view) => (inListItem(state) ? (indentListItem(state, dispatch, view), true) : false);
 const shiftTabInList: Command = (state, dispatch, view) => (inListItem(state) ? (outdentListItem(state, dispatch, view), true) : false);
 
