@@ -91,15 +91,28 @@ describe("sidebar", () => {
     expect(el.querySelector('[data-path="Courses.md"]')?.textContent).not.toContain(".md");
   });
 
-  it("folder_rows_carry_the_folder_class_and_are_styled_in_accent_bold_italic", async () => {
+  it("folder_rows_carry_the_folder_class_and_are_styled_in_accent_bold_not_italic", async () => {
     const { row } = await setup();
     expect(row("Projets").classList.contains("folder")).toBe(true);
     expect(row("Courses.md").classList.contains("folder")).toBe(false);
     const rule = /\.sb-row\.folder \{[^}]*\}/.exec(themeCss())![0];
     expect(rule).toContain("color: var(--accent)");
     expect(rule).toContain("font-weight: 700");
-    expect(rule).toContain("font-style: italic");
+    expect(rule).not.toContain("italic");
     expect(/\.sb-row\.note[^{]*\{[^}]*(font-style|color: var\(--accent\))/.test(themeCss())).toBe(false);
+  });
+
+  it("folder_rows_have_a_wireframe_icon_open_or_closed_and_notes_have_none", async () => {
+    const { row } = await setup();
+    const icon = (p: string) => row(p).querySelector<SVGElement>("svg.sb-icon");
+    expect(icon("Courses.md")).toBeNull();
+    expect(icon("Projets")!.getAttribute("width")).toBe("16");
+    expect(icon("Projets")!.dataset.open).toBe("false");
+    row("Projets").click();
+    expect(icon("Projets")!.dataset.open).toBe("true");
+    const rule = /.sb-icon {[^}]*}/.exec(themeCss())![0];
+    expect(rule).toContain("stroke: var(--accent)");
+    expect(rule).toContain("fill: none");
   });
 
   it("new_note_uses_selected_folder", async () => {

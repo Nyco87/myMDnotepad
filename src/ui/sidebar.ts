@@ -61,6 +61,30 @@ const baseOf = (rel: string): string => {
   return last.replace(/\.md$/i, "");
 };
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+const FOLDER_CLOSED = ["M1.75 4.25a1 1 0 0 1 1-1h3.1l1.4 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1z"];
+const FOLDER_OPEN = [
+  "M1.75 12.25V4.25a1 1 0 0 1 1-1h3.1l1.4 1.5h5.5a1 1 0 0 1 1 1V6.5",
+  "M1.75 12.75l1.65-5.4a1 1 0 0 1 .95-.7h10.1a.6.6 0 0 1 .57.78l-1.55 5a1 1 0 0 1-.96.72z",
+];
+
+/** Icône de dossier filaire de 16 px (contour seul, pas de remplissage) : ouverte quand le dossier est déplié. */
+function folderIcon(open: boolean): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", "sb-icon");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("width", "16");
+  svg.setAttribute("height", "16");
+  svg.setAttribute("aria-hidden", "true");
+  svg.dataset.open = String(open);
+  for (const d of open ? FOLDER_OPEN : FOLDER_CLOSED) {
+    const p = document.createElementNS(SVG_NS, "path");
+    p.setAttribute("d", d);
+    svg.appendChild(p);
+  }
+  return svg;
+}
+
 export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): SidebarHandle {
   el.classList.add("sidebar");
   el.textContent = "";
@@ -179,6 +203,8 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
     chev.className = "sb-chev";
     chev.textContent = n.kind === "folder" ? (expanded.has(n.path) ? "▾" : "▸") : "";
     row.appendChild(chev);
+
+    if (n.kind === "folder") row.appendChild(folderIcon(expanded.has(n.path)));
 
     if (editing && editing.path === n.path) {
       const wrap = document.createElement("div");

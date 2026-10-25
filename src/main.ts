@@ -32,6 +32,7 @@ import { applyTransparencyCss, DEFAULT_TRANSPARENCY } from "./ui/appearance";
 import { confirmDialog } from "./ui/confirm-dialog";
 import { showFirstRun } from "./ui/first-run";
 import { mountSidebar, type SidebarHandle } from "./ui/sidebar";
+import { mountSidebarPanel, type SidebarPanelHandle } from "./ui/sidebar-panel";
 import { createTabs, NOT_FOUND, noteTitle, type TabsController } from "./ui/tabs";
 import { mountSettingsTab, type SettingsTabHandle } from "./ui/settings-tab";
 import { mountTitlebar, SETTINGS_TAB, type TabView } from "./ui/titlebar";
@@ -90,6 +91,7 @@ async function main(): Promise<void> {
   let tabs: TabsController | null = null;
   let toolbar: ToolbarHandle | null = null;
   let sidebar: SidebarHandle | null = null;
+  let sidebarPanel: SidebarPanelHandle | null = null;
   let restoring = true;
   let lastActive: string | null = null;
   // Onglet Réglages : un seul à la fois, jamais enregistré ni restauré (ce n'est pas une note).
@@ -328,6 +330,10 @@ async function main(): Promise<void> {
         e.preventDefault();
         e.stopPropagation();
         void sidebar?.newNote();
+      } else if (e.key === "\\" && !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        sidebarPanel?.toggle();
       } else if (key === "w" && !e.shiftKey) {
         e.preventDefault();
         e.stopPropagation();
@@ -424,6 +430,12 @@ async function main(): Promise<void> {
       onRenamed: (oldRel, newRel) => tabs?.renamed(oldRel, newRel),
       onDeleted: (rel) => tabs?.deleted(rel),
       onError: toast,
+    });
+    sidebarPanel = mountSidebarPanel(ui.sidebar, {
+      width: settings.sidebar_width ?? null,
+      collapsed: settings.sidebar_collapsed ?? false,
+      onChange: (patch) => void updateSettings(patch).catch((e) => console.error("sidebar layout not saved", e)),
+      newNote: () => void sidebar?.newNote(),
     });
     onTabsChange();
 

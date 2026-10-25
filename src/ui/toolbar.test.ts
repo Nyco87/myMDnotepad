@@ -38,7 +38,9 @@ describe("toolbar", () => {
 
   it("alert_button_opens_the_five_kinds_inserts_or_changes_kind", () => {
     const { ed, btn } = setup("texte\n");
-    expect(btn("alert").textContent).toBe("Alerte ▾");
+    expect(btn("alert").querySelector("svg")).not.toBeNull();
+    expect(btn("alert").textContent).toBe("▾");
+    expect(btn("alert").title).toBe("Alerte");
     setCursor(ed.view, 2);
     btn("alert").click();
     const labels = () => [...document.querySelectorAll<HTMLElement>(".ctx-menu button")].map((b) => b.textContent);
@@ -125,10 +127,11 @@ describe("toolbar", () => {
     const { ed, btn, tb } = setup("# Title\n\n- item\n");
     setCursor(ed.view, 2);
     tb.refresh();
-    expect(btn("heading").textContent).toBe("Titre 1 ▾");
+    expect(btn("heading").textContent).toBe("H1 ▾");
+    expect(btn("heading").title).toBe("Style de paragraphe");
     setCursor(ed.view, 12);
     tb.refresh();
-    expect(btn("heading").textContent).toBe("Paragraphe ▾");
+    expect(btn("heading").textContent).toBe("¶ ▾");
     expect(btn("bullet").classList.contains("active")).toBe(true);
   });
 

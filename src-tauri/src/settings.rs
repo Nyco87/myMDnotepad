@@ -23,6 +23,10 @@ pub struct Settings {
     pub transparency: u8,
     /// "fr" | "en" ; `None` = langue de Windows.
     pub language: Option<String>,
+    /// Largeur du panneau latéral en px (`None` = défaut de l'interface).
+    pub sidebar_width: Option<u16>,
+    /// Panneau latéral réduit à une bande étroite.
+    pub sidebar_collapsed: bool,
 }
 
 pub const DEFAULT_TRANSPARENCY: u8 = 50;
@@ -36,6 +40,8 @@ impl Default for Settings {
             recent_emojis: vec![],
             transparency: DEFAULT_TRANSPARENCY,
             language: None,
+            sidebar_width: None,
+            sidebar_collapsed: false,
         }
     }
 }
@@ -178,7 +184,7 @@ pub fn check_file(path: &Path) -> Result<Settings, String> {
     serde_json::from_value::<Settings>(value).map_err(|_| "SETTINGS_INVALID".to_string())
 }
 
-const KNOWN_KEYS: [&str; 6] = ["root_dir", "open_tabs", "active_tab", "recent_emojis", "transparency", "language"];
+const KNOWN_KEYS: [&str; 8] = ["root_dir", "open_tabs", "active_tab", "recent_emojis", "transparency", "language", "sidebar_width", "sidebar_collapsed"];
 
 /// Copie le fichier de réglages actuel à côté de lui sous un nom unique `mymdnotepad.settings.replaced[-N].json`
 /// (avant de le remplacer par un fichier chargé). Renvoie la copie, ou `None` s'il n'y avait rien à copier.
@@ -201,7 +207,7 @@ pub fn backup_before_replace(path: &Path) -> Result<Option<PathBuf>, String> {
 pub fn apply_patch(cur: &Settings, patch: &serde_json::Map<String, serde_json::Value>) -> Result<Settings, String> {
     let mut value = serde_json::to_value(cur).map_err(|e| e.to_string())?;
     let obj = value.as_object_mut().ok_or("Réglages indisponibles")?;
-    for k in ["root_dir", "open_tabs", "active_tab", "recent_emojis", "transparency", "language"] {
+    for k in ["root_dir", "open_tabs", "active_tab", "recent_emojis", "transparency", "language", "sidebar_width", "sidebar_collapsed"] {
         if let Some(v) = patch.get(k) {
             obj.insert(k.to_string(), v.clone());
         }
@@ -478,7 +484,7 @@ mod tests {
     #[test] fn save_then_load_roundtrip() {
         let d = tempdir().unwrap();
         let p = d.path().join("s.json");
-        let s = Settings { root_dir: Some("C:/n".into()), open_tabs: vec!["a.md".into()], active_tab: Some("a.md".into()), recent_emojis: vec!["x".into()], transparency: 70, language: Some("fr".into()) };
+        let s = Settings { root_dir: Some("C:/n".into()), open_tabs: vec!["a.md".into()], active_tab: Some("a.md".into()), recent_emojis: vec!["x".into()], transparency: 70, language: Some("fr".into()), sidebar_width: Some(300), sidebar_collapsed: true };
         save(&p, &s).unwrap();
         assert_eq!(load(&p), s);
     }
@@ -529,6 +535,18 @@ mod tests {
         let l = resolve_location(e.path(), a.path());
         assert_eq!((l.mode, l.warning.as_deref()), (LocationMode::Appdata, Some("pointer_invalid")));
     }
+    #[test]
+    fn sidebar_fields_default_and_patch() {
+        let d: Settings = serde_json::from_str("{}").unwrap();
+        assert_eq!(d.sidebar_width, None);
+        assert!(!d.sidebar_collapsed);
+        let patch = serde_json::json!({"sidebar_width": 300, "sidebar_collapsed": true});
+        let n = apply_patch(&d, patch.as_object().unwrap()).unwrap();
+        assert_eq!((n.sidebar_width, n.sidebar_collapsed), (Some(300), true));
+        let patch = serde_json::json!({"sidebar_width": null});
+        assert_eq!(apply_patch(&n, patch.as_object().unwrap()).unwrap().sidebar_width, None);
+    }
+
     fn sample() -> Settings { Settings { root_dir: Some("C:/n".into()), transparency: 20, language: Some("en".into()), ..Settings::default() } }
     #[test] fn move_writes_new_file_and_pointer_and_keeps_old() {
         let e = tempdir().unwrap(); let a = tempdir().unwrap(); let d = tempdir().unwrap();

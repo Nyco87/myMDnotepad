@@ -11,6 +11,9 @@ export type Settings = {
   transparency: number;
   /** "fr" | "en" ; null = langue de Windows. */
   language: string | null;
+  /** Largeur du panneau latéral (px) ; null = défaut. */
+  sidebar_width: number | null;
+  sidebar_collapsed: boolean;
 };
 export type RootStatus = "ok" | "unset" | "missing";
 

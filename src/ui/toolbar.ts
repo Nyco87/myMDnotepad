@@ -164,6 +164,29 @@ interface ButtonDef {
   popup?: string;
 }
 
+/** Wireframe alert icon (rounded square with "!") followed by a small ▾. */
+function alertLabel(): Node {
+  const NS = "http://www.w3.org/2000/svg";
+  const frag = document.createDocumentFragment();
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("width", "16");
+  svg.setAttribute("height", "16");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.5");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  for (const d of ["M3.75 2h8.5A1.75 1.75 0 0 1 14 3.75v8.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25v-8.5A1.75 1.75 0 0 1 3.75 2z", "M8 4.75v4", "M8 11.2v.05"]) {
+    const p = document.createElementNS(NS, "path");
+    p.setAttribute("d", d);
+    svg.appendChild(p);
+  }
+  frag.append(svg, "▾");
+  return frag;
+}
+
 type ListBlock = "blockquote" | "bullet_list" | "ordered_list" | "task_list";
 
 /**
@@ -235,8 +258,8 @@ export function mountToolbar(
       { id: "quote", label: "❝", title: "toolbar.quote", active: inNode("blockquote"), command: toggleBlock("blockquote") },
       {
         id: "alert",
-        label: "Alerte ▾",
-        labelKey: "toolbar.alertLabel",
+        label: "▾",
+        labelEl: alertLabel,
         title: "toolbar.alert",
         className: "tb-alert",
         active: inNode("alert"),
@@ -435,7 +458,7 @@ export function mountToolbar(
       if (def.enabled) btn.disabled = !state || !def.enabled(state);
     }
     const level = state ? headingLevel(state) : 0;
-    headingBtn.textContent = (level > 0 ? t("toolbar.heading", { n: level }) : t("toolbar.paragraph")) + " ▾";
+    headingBtn.textContent = (level > 0 ? `H${level}` : "¶") + " ▾";
     headingBtn.classList.toggle("active", level > 0);
   }
 
