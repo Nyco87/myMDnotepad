@@ -5,6 +5,8 @@ import type { EditorView } from "prosemirror-view";
 import { isInTable } from "prosemirror-tables";
 import { getSettings, saveSettings } from "../api";
 import {
+  indentListItem,
+  outdentListItem,
   insertCodeBlock,
   insertHorizontalRule,
   insertLink,
@@ -149,6 +151,8 @@ interface ButtonDef {
   active?: (s: EditorState) => boolean;
   /** Custom label content (e.g. an element); defaults to the text `label`. */
   labelEl?: () => Node;
+  /** Disabled when false (default: always enabled). */
+  enabled?: (s: EditorState) => boolean;
   /** Plain command run on the editor. */
   command?: (s: EditorState) => Command;
   /** Popup / async action. */
@@ -221,6 +225,8 @@ export function mountToolbar(
       { id: "bullet", label: "•≡", title: "Liste à puces", active: inNode("bullet_list"), command: toggleBlock("bullet_list") },
       { id: "ordered", label: "1≡", title: "Liste numérotée", active: inNode("ordered_list"), command: toggleBlock("ordered_list") },
       { id: "task", label: "☑", title: "Liste de tâches (Ctrl+Entrée pour cocher)", active: inNode("task_list"), command: toggleBlock("task_list") },
+      { id: "indent", label: "⇥", title: "Augmenter le retrait (Tab)", enabled: (s) => indentListItem(s), command: () => indentListItem },
+      { id: "outdent", label: "⇤", title: "Réduire le retrait (Maj+Tab)", enabled: (s) => outdentListItem(s), command: () => outdentListItem },
     ],
     [
       { id: "quote", label: "❝", title: "Citation", active: inNode("blockquote"), command: toggleBlock("blockquote") },
@@ -423,6 +429,7 @@ export function mountToolbar(
       const on = !!state && !!def.active && def.active(state);
       btn.classList.toggle("active", on);
       btn.setAttribute("aria-pressed", String(on));
+      if (def.enabled) btn.disabled = !state || !def.enabled(state);
     }
     const level = state ? headingLevel(state) : 0;
     headingBtn.textContent = (level > 0 ? `Titre ${level}` : "Paragraphe") + " ▾";

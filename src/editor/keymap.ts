@@ -7,7 +7,7 @@ import {
   toggleMark as pmToggleMark,
   wrapIn as pmWrapIn,
 } from "prosemirror-commands";
-import { splitListItem } from "prosemirror-schema-list";
+import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
 import { NodeSelection, Selection, TextSelection, type Command, type Plugin } from "prosemirror-state";
 import type { Schema } from "prosemirror-model";
 import { schema as defaultSchema } from "../markdown/schema";
@@ -91,6 +91,36 @@ export function insertLink(href: string): Command {
     return true;
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Indentation of list items (bullet, numbered and task lists)          */
+/* ------------------------------------------------------------------ */
+
+function inListItem(state: import("prosemirror-state").EditorState): boolean {
+  const { list_item, task_item } = state.schema.nodes;
+  const { $from } = state.selection;
+  for (let d = $from.depth; d >= 1; d--) {
+    const t = $from.node(d).type;
+    if (t === list_item || t === task_item) return true;
+  }
+  return false;
+}
+
+/** Applicable: the item can be nested under its previous sibling. */
+export const indentListItem: Command = (state, dispatch, view) => {
+  const { list_item, task_item } = state.schema.nodes;
+  return sinkListItem(task_item)(state, dispatch, view) || sinkListItem(list_item)(state, dispatch, view);
+};
+
+/** Applicable: the item can move out one level (a top-level item leaves the list). */
+export const outdentListItem: Command = (state, dispatch, view) => {
+  const { list_item, task_item } = state.schema.nodes;
+  return liftListItem(task_item)(state, dispatch, view) || liftListItem(list_item)(state, dispatch, view);
+};
+
+/** Tab in a list: indent; swallowed even when impossible (first item) so focus never leaves the editor. */
+const tabInList: Command = (state, dispatch, view) => (inListItem(state) ? (indentListItem(state, dispatch, view), true) : false);
+const shiftTabInList: Command = (state, dispatch, view) => (inListItem(state) ? (outdentListItem(state, dispatch, view), true) : false);
 
 /* ------------------------------------------------------------------ */
 /* Enter: markdown fences and sticky blocks                            */
@@ -274,8 +304,8 @@ export function buildKeymap(schema: Schema = defaultSchema): Plugin {
     ArrowDown: arrowDownLeavesBlock,
 
     // Table cell navigation; both return false outside a table so Tab keeps its default behaviour.
-    Tab: tabNextCell,
-    "Shift-Tab": tabPrevCell,
+    Tab: chainCommands(tabNextCell, tabInList),
+    "Shift-Tab": chainCommands(tabPrevCell, shiftTabInList),
   };
   for (let level = 1; level <= 6; level++) {
     bindings[`Mod-${level}`] = setHeading(level as 1 | 2 | 3 | 4 | 5 | 6);

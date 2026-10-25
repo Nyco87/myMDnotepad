@@ -31,7 +31,7 @@ describe("toolbar", () => {
   it("has the buttons in the specified order with French tooltips", () => {
     const { el } = setup("a\n");
     const ids = [...el.querySelectorAll<HTMLElement>(".tb-btn")].map((b) => b.dataset.id);
-    expect(ids).toEqual(["heading", "bold", "italic", "strike", "highlight", "code", "emoji", "bullet", "ordered", "task", "quote", "alert", "codeblock", "table", "link", "image", "hr", "diagram"]);
+    expect(ids).toEqual(["heading", "bold", "italic", "strike", "highlight", "code", "emoji", "bullet", "ordered", "task", "indent", "outdent", "quote", "alert", "codeblock", "table", "link", "image", "hr", "diagram"]);
     expect((el.querySelector("[data-id=bold]") as HTMLElement).title).toBe("Gras (Ctrl+B)");
   });
 
