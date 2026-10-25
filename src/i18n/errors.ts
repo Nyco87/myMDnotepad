@@ -48,7 +48,7 @@ const RULES: [RegExp, string][] = [
   [/^Ce dossier n'existe pas : (.*)$/s, "This folder does not exist: $1"],
 ];
 
-const CODES = ["SETTINGS_UNREADABLE", "SETTINGS_INVALID", "SETTINGS_DEST_INVALID", "SETTINGS_DEST_EXISTS", "SETTINGS_OLD_LOCKED", "PATH_NOT_FOUND"];
+const CODES = ["SETTINGS_UNREADABLE", "SETTINGS_INVALID", "SETTINGS_NO_KNOWN_KEYS", "SETTINGS_DEST_INVALID", "SETTINGS_DEST_EXISTS", "SETTINGS_OLD_LOCKED", "PATH_NOT_FOUND"];
 
 export function localizeError(raw: string, lang: "fr" | "en", t: T): string {
   const code = CODES.find((c) => raw === c || raw.endsWith(`: ${c}`));

@@ -3,7 +3,7 @@ import { liftListItem } from "prosemirror-schema-list";
 import type { EditorState, Command } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { isInTable } from "prosemirror-tables";
-import { getSettings, saveSettings } from "../api";
+import { getSettings, updateSettings } from "../api";
 import { onLanguageChanged, t, tr, type Key } from "../i18n";
 import {
   indentListItem,
@@ -218,7 +218,7 @@ export function mountToolbar(
             }
             void (async () => {
               const fresh = await getSettings(); // re-read: never overwrite other settings with a stale copy
-              await saveSettings({ ...fresh, recent_emojis: pushRecent(fresh.recent_emojis, e) });
+              await updateSettings({ recent_emojis: pushRecent(fresh.recent_emojis, e) });
             })().catch((err) => console.error("recent emojis not saved", err));
           });
         },

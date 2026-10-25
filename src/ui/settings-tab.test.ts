@@ -24,7 +24,7 @@ function setup(
     pickFolder: vi.fn(async () => "D:/OneDrive" as string | null),
     pickSettingsFile: vi.fn(async () => "D:/other.json" as string | null),
     moveSettings: vi.fn(async (dir: string) => ({ ...location, path: `${dir}/mymdnotepad.settings.json`, mode: "custom" as const })),
-    checkSettingsFile: vi.fn(async () => {}),
+    checkSettingsFile: vi.fn(async () => ({ root_dir: "E:/Autres notes" as string | null })),
     loadSettingsFile: vi.fn(async () => {}),
     confirm: vi.fn(async () => true),
     setTransparency: vi.fn(),
@@ -125,7 +125,10 @@ describe("settings tab", () => {
     buttons(host)["Charger…"].click();
     await flush();
     expect(deps.checkSettingsFile).toHaveBeenCalledWith("D:/other.json");
-    expect(deps.confirm).toHaveBeenCalledWith("Remplacer les réglages actuels par ceux de ce fichier ?", "Remplacer");
+    const [message, ok] = vi.mocked(deps.confirm).mock.calls[0];
+    expect(message).toContain("Remplacer les réglages actuels");
+    expect(message).toContain("E:/Autres notes");
+    expect(ok).toBe("Remplacer");
     expect(deps.loadSettingsFile).toHaveBeenCalledWith("D:/other.json");
   });
 

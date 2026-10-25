@@ -280,4 +280,7 @@ export const en: Record<keyof typeof fr, string> = {
   "settings.about.license": "License: see the GitHub repository",
   "settings.about.libs": "Main libraries: {list}",
   "titlebar.settings": "Settings",
+  "err.SETTINGS_NO_KNOWN_KEYS": "This file contains no recognised setting: it was not loaded.",
+  "settings.file.loadConfirmRoot": "Replace the current settings with those from this file?\nNotes folder that will be loaded: {root}\n(The current settings are first copied next to them as .replaced.json.)",
+  "settings.file.loadNoRoot": "(none)",
 };

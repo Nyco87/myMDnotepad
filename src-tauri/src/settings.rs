@@ -169,7 +169,54 @@ pub fn save(path: &Path, s: &Settings) -> Result<(), String> {
 /// Lit et valide un fichier de réglages choisi par l'utilisateur : JSON objet valide (champs manquants → défauts).
 pub fn check_file(path: &Path) -> Result<Settings, String> {
     let text = std::fs::read_to_string(path).map_err(|_| "SETTINGS_UNREADABLE".to_string())?;
-    serde_json::from_str::<Settings>(&text).map_err(|_| "SETTINGS_INVALID".to_string())
+    let value = serde_json::from_str::<serde_json::Value>(&text).map_err(|_| "SETTINGS_INVALID".to_string())?;
+    let obj = value.as_object().ok_or_else(|| "SETTINGS_INVALID".to_string())?;
+    // `{}`, un package.json, un location.json… ne sont pas des réglages : ils effaceraient tout par des valeurs par défaut.
+    if !KNOWN_KEYS.iter().any(|k| obj.contains_key(*k)) {
+        return Err("SETTINGS_NO_KNOWN_KEYS".into());
+    }
+    serde_json::from_value::<Settings>(value).map_err(|_| "SETTINGS_INVALID".to_string())
+}
+
+const KNOWN_KEYS: [&str; 6] = ["root_dir", "open_tabs", "active_tab", "recent_emojis", "transparency", "language"];
+
+/// Copie le fichier de réglages actuel à côté de lui sous un nom unique `mymdnotepad.settings.replaced[-N].json`
+/// (avant de le remplacer par un fichier chargé). Renvoie la copie, ou `None` s'il n'y avait rien à copier.
+pub fn backup_before_replace(path: &Path) -> Result<Option<PathBuf>, String> {
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let mut dest = dir.join("mymdnotepad.settings.replaced.json");
+    let mut n = 2;
+    while dest.exists() {
+        dest = dir.join(format!("mymdnotepad.settings.replaced-{n}.json"));
+        n += 1;
+    }
+    std::fs::copy(path, &dest).map_err(|e| format!("Impossible d'enregistrer les réglages : {e}"))?;
+    Ok(Some(dest))
+}
+
+/// Fusionne dans `cur` uniquement les champs présents dans `patch` (les autres restent tels quels).
+pub fn apply_patch(cur: &Settings, patch: &serde_json::Map<String, serde_json::Value>) -> Result<Settings, String> {
+    let mut value = serde_json::to_value(cur).map_err(|e| e.to_string())?;
+    let obj = value.as_object_mut().ok_or("Réglages indisponibles")?;
+    for k in ["root_dir", "open_tabs", "active_tab", "recent_emojis", "transparency", "language"] {
+        if let Some(v) = patch.get(k) {
+            obj.insert(k.to_string(), v.clone());
+        }
+    }
+    serde_json::from_value(value).map_err(|e| e.to_string())
+}
+
+/// Écrit `s` à l'emplacement courant. Si on est revenu sur AppData à cause d'un pointeur cassé, le pointeur est
+/// réécrit vers ce fichier : un ancien fichier qui réapparaîtrait ne peut plus l'emporter en silence.
+pub fn write_current(loc: &mut SettingsLocation, s: &Settings, appdata: &Path) -> Result<(), String> {
+    save(&loc.path, s)?;
+    if loc.warning.is_some() && write_pointer(appdata, &loc.path).is_ok() {
+        loc.warning = None;
+    }
+    Ok(())
 }
 
 fn write_pointer(appdata: &Path, target: &Path) -> Result<(), String> {
@@ -257,54 +304,73 @@ fn exe_and_appdata() -> (PathBuf, PathBuf) {
     (exe_dir, appdata)
 }
 
-fn cur_path(state: &AppState) -> Result<PathBuf, String> {
-    Ok(state.location.lock().map_err(|_| "Réglages indisponibles")?.path.clone())
-}
+const UNAVAILABLE: &str = "Réglages indisponibles";
 
 #[tauri::command]
 pub fn get_settings(state: State<AppState>) -> Result<Settings, String> {
-    Ok(state.settings.lock().map_err(|_| "Réglages indisponibles")?.clone())
+    Ok(state.settings.lock().map_err(|_| UNAVAILABLE)?.clone())
 }
+
+// Ordre des verrous, partout : `settings` puis `location` (le chemin est lu SOUS le verrou des réglages,
+// sinon une écriture concurrente d'un `move_settings` pourrait recréer l'ancien fichier).
 
 #[tauri::command]
 pub fn save_settings(state: State<AppState>, settings: Settings) -> Result<(), String> {
-    let path = cur_path(&state)?;
-    let mut cur = state.settings.lock().map_err(|_| "Réglages indisponibles")?;
-    save(&path, &settings)?;
+    let (_, appdata) = exe_and_appdata();
+    let mut cur = state.settings.lock().map_err(|_| UNAVAILABLE)?;
+    let mut loc = state.location.lock().map_err(|_| UNAVAILABLE)?;
+    write_current(&mut loc, &settings, &appdata)?;
     *cur = settings;
     Ok(())
 }
 
+/// Mise à jour partielle : seuls les champs présents dans `patch` changent (open_tabs, active_tab, recent_emojis,
+/// transparency, language, root_dir). Évite qu'une copie périmée côté interface écrase un autre réglage.
+#[tauri::command]
+pub fn update_settings(state: State<AppState>, patch: serde_json::Map<String, serde_json::Value>) -> Result<Settings, String> {
+    let (_, appdata) = exe_and_appdata();
+    let mut cur = state.settings.lock().map_err(|_| UNAVAILABLE)?;
+    let mut loc = state.location.lock().map_err(|_| UNAVAILABLE)?;
+    let next = apply_patch(&cur, &patch)?;
+    write_current(&mut loc, &next, &appdata)?;
+    *cur = next.clone();
+    Ok(next)
+}
+
 #[tauri::command]
 pub fn get_settings_location(state: State<AppState>) -> Result<SettingsLocation, String> {
-    Ok(state.location.lock().map_err(|_| "Réglages indisponibles")?.clone())
+    Ok(state.location.lock().map_err(|_| UNAVAILABLE)?.clone())
 }
 
 #[tauri::command]
 pub fn move_settings(state: State<AppState>, dest_dir: String) -> Result<SettingsLocation, String> {
     let (exe_dir, appdata) = exe_and_appdata();
-    let settings = state.settings.lock().map_err(|_| "Réglages indisponibles")?.clone();
-    let mut loc = state.location.lock().map_err(|_| "Réglages indisponibles")?;
-    let next = move_settings_to(&loc, &settings, Path::new(&dest_dir), &exe_dir, &appdata)?;
+    let cur = state.settings.lock().map_err(|_| UNAVAILABLE)?;
+    let mut loc = state.location.lock().map_err(|_| UNAVAILABLE)?;
+    let next = move_settings_to(&loc, &cur, Path::new(&dest_dir), &exe_dir, &appdata)?;
     *loc = next.clone();
     Ok(next)
 }
 
-/// Valide un fichier de réglages sans rien changer (erreurs : SETTINGS_UNREADABLE / SETTINGS_INVALID).
+/// Valide un fichier de réglages sans rien changer et renvoie son contenu (l'interface affiche son dossier de notes
+/// dans la confirmation). Erreurs : SETTINGS_UNREADABLE / SETTINGS_INVALID / SETTINGS_NO_KNOWN_KEYS.
 #[tauri::command]
-pub fn check_settings_file(path: String) -> Result<(), String> {
-    check_file(Path::new(&path)).map(|_| ())
+pub fn check_settings_file(path: String) -> Result<Settings, String> {
+    check_file(Path::new(&path))
 }
 
-/// Adopte un fichier de réglages : validé, puis enregistré à l'emplacement courant (remplace les réglages actuels —
-/// la confirmation est demandée par l'interface avant l'appel). Renvoie les nouveaux réglages.
+/// Adopte un fichier de réglages : validé, l'actuel est copié en `mymdnotepad.settings.replaced[-N].json`, puis le
+/// nouveau est enregistré à l'emplacement courant (la confirmation est demandée par l'interface avant l'appel).
 #[tauri::command]
 pub fn load_settings_file(app: tauri::AppHandle, state: State<AppState>, path: String) -> Result<Settings, String> {
+    let (_, appdata) = exe_and_appdata();
     let loaded = check_file(Path::new(&path))?;
-    let dest = cur_path(&state)?;
-    let mut cur = state.settings.lock().map_err(|_| "Réglages indisponibles")?;
-    save(&dest, &loaded)?;
+    let mut cur = state.settings.lock().map_err(|_| UNAVAILABLE)?;
+    let mut loc = state.location.lock().map_err(|_| UNAVAILABLE)?;
+    backup_before_replace(&loc.path)?;
+    write_current(&mut loc, &loaded, &appdata)?;
     *cur = loaded.clone();
+    drop(loc);
     drop(cur);
     if let Some(r) = loaded.root_dir.as_deref().filter(|r| Path::new(r).is_dir()) {
         let _ = app.asset_protocol_scope().allow_directory(r, true);
@@ -320,11 +386,12 @@ pub fn set_transparency(app: tauri::AppHandle, state: State<AppState>, value: u8
     let value = value.min(100);
     crate::window_fx::apply_transparency(&app, value);
     if persist {
-        let path = cur_path(&state)?;
-        let mut cur = state.settings.lock().map_err(|_| "Réglages indisponibles")?;
+        let (_, appdata) = exe_and_appdata();
+        let mut cur = state.settings.lock().map_err(|_| UNAVAILABLE)?;
+        let mut loc = state.location.lock().map_err(|_| UNAVAILABLE)?;
         let mut next = cur.clone();
         next.transparency = value;
-        save(&path, &next)?;
+        write_current(&mut loc, &next, &appdata)?;
         *cur = next;
     }
     Ok(())
@@ -350,12 +417,14 @@ pub fn set_root(app: tauri::AppHandle, state: State<AppState>, abs: String) -> R
     if !Path::new(&abs).is_dir() {
         return Err(format!("Ce dossier n'existe pas : {abs}"));
     }
-    let path = cur_path(&state)?;
-    let mut cur = state.settings.lock().map_err(|_| "Réglages indisponibles")?;
+    let (_, appdata) = exe_and_appdata();
+    let mut cur = state.settings.lock().map_err(|_| UNAVAILABLE)?;
+    let mut loc = state.location.lock().map_err(|_| UNAVAILABLE)?;
     let mut next = cur.clone();
     let abs_dir = abs.clone();
     next.root_dir = Some(abs);
-    save(&path, &next)?;
+    write_current(&mut loc, &next, &appdata)?;
+    drop(loc);
     *cur = next;
     // Autorise le protocole asset (aperçu des images) sur le nouveau dossier.
     app.asset_protocol_scope()
@@ -516,6 +585,62 @@ mod tests {
         std::fs::write(&bad, "42").unwrap();
         assert_eq!(check_file(&bad).unwrap_err(), "SETTINGS_INVALID");
         assert_eq!(check_file(&d.path().join("none.json")).unwrap_err(), "SETTINGS_UNREADABLE");
+    }
+    #[test] fn check_file_rejects_json_without_any_known_key() {
+        let d = tempdir().unwrap();
+        let p = d.path().join("x.json");
+        for text in ["{}", r#"{"name":"pkg","version":"1.0.0"}"#, r#"{"settings_path":"C:/x.json"}"#] {
+            std::fs::write(&p, text).unwrap();
+            assert_eq!(check_file(&p).unwrap_err(), "SETTINGS_NO_KNOWN_KEYS", "{text}");
+        }
+    }
+    #[test] fn backup_keeps_the_current_file_under_unique_names() {
+        let d = tempdir().unwrap();
+        let p = d.path().join("mymdnotepad.settings.json");
+        assert_eq!(backup_before_replace(&p).unwrap(), None);
+        save(&p, &sample()).unwrap();
+        let b1 = backup_before_replace(&p).unwrap().unwrap();
+        let b2 = backup_before_replace(&p).unwrap().unwrap();
+        assert_eq!(b1, d.path().join("mymdnotepad.settings.replaced.json"));
+        assert_eq!(b2, d.path().join("mymdnotepad.settings.replaced-2.json"));
+        assert_eq!(load(&b1), sample());
+        assert!(p.exists());
+    }
+    #[test] fn patch_only_touches_the_given_fields() {
+        let cur = Settings { root_dir: Some("C:/n".into()), transparency: 20, language: Some("en".into()), open_tabs: vec!["a.md".into()], ..Settings::default() };
+        let patch: serde_json::Map<String, serde_json::Value> = serde_json::from_str(r#"{"open_tabs":["b.md"],"active_tab":"b.md","bogus":1}"#).unwrap();
+        let next = apply_patch(&cur, &patch).unwrap();
+        assert_eq!((next.open_tabs.clone(), next.active_tab.clone()), (vec!["b.md".to_string()], Some("b.md".to_string())));
+        assert_eq!((next.transparency, next.language.clone(), next.root_dir.clone()), (20, Some("en".into()), Some("C:/n".into())));
+        let clear: serde_json::Map<String, serde_json::Value> = serde_json::from_str(r#"{"active_tab":null}"#).unwrap();
+        assert_eq!(apply_patch(&next, &clear).unwrap().active_tab, None);
+    }
+    #[test] fn writing_after_a_pointer_fallback_rewrites_the_dead_pointer() {
+        let e = tempdir().unwrap(); let a = tempdir().unwrap();
+        let old = tempdir().unwrap();
+        let gone = old.path().join("mymdnotepad.settings.json");
+        pointer(a.path(), &gone);
+        let mut l = resolve_location(e.path(), a.path());
+        assert_eq!(l.warning.as_deref(), Some("pointer_missing"));
+        write_current(&mut l, &sample(), a.path()).unwrap();
+        assert!(l.warning.is_none());
+        // l'ancien fichier réapparaît : il ne l'emporte plus
+        std::fs::write(&gone, "{}").unwrap();
+        let again = resolve_location(e.path(), a.path());
+        assert_eq!(again.path, l.path);
+        assert!(again.warning.is_none());
+    }
+    #[test] fn writes_follow_the_location_they_are_given_not_a_stale_one() {
+        // Après un déplacement, une écriture passe par le nouvel emplacement : l'ancien fichier n'est pas recréé.
+        let e = tempdir().unwrap(); let a = tempdir().unwrap(); let d = tempdir().unwrap();
+        let old = a.path().join("myMDnotepad").join("mymdnotepad.settings.json");
+        save(&old, &sample()).unwrap();
+        let cur = loc(old.clone(), LocationMode::Appdata);
+        let mut moved = move_settings_to(&cur, &sample(), d.path(), e.path(), a.path()).unwrap();
+        std::fs::remove_file(&old).unwrap();
+        write_current(&mut moved, &Settings::default(), a.path()).unwrap();
+        assert!(!old.exists());
+        assert!(moved.path.exists());
     }
     #[test] fn old_files_without_new_fields_get_defaults() {
         let d = tempdir().unwrap(); let p = d.path().join("s.json");

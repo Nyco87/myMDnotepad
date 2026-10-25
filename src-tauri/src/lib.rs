@@ -41,6 +41,7 @@ pub fn run() {
             accent::get_accent_color,
             settings::get_settings,
             settings::save_settings,
+            settings::update_settings,
             settings::get_settings_location,
             settings::move_settings,
             settings::check_settings_file,

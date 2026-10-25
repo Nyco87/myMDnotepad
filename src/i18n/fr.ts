@@ -278,4 +278,7 @@ export const fr = {
   "settings.about.license": "Licence : voir le dépôt GitHub",
   "settings.about.libs": "Bibliothèques principales : {list}",
   "titlebar.settings": "Réglages",
+  "err.SETTINGS_NO_KNOWN_KEYS": "Ce fichier ne contient aucun réglage reconnu : il n'a pas été chargé.",
+  "settings.file.loadConfirmRoot": "Remplacer les réglages actuels par ceux de ce fichier ?\nDossier des notes chargé : {root}\n(Les réglages actuels sont d'abord copiés à côté, en .replaced.json.)",
+  "settings.file.loadNoRoot": "(aucun)",
 } as const;

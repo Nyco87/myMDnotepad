@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("../api", () => ({
   getSettings: vi.fn(async () => ({ recent_emojis: ["🚀"] })),
   saveSettings: vi.fn(async () => {}),
+  updateSettings: vi.fn(async () => ({})),
   saveImage: vi.fn(),
   importImage: vi.fn(),
   resolveAsset: (r: string) => r,

@@ -17,7 +17,7 @@ export interface SettingsTabDeps {
   pickSettingsFile(): Promise<string | null>;
   moveSettings(destDir: string): Promise<SettingsLocation>;
   /** Valide le fichier (rejette avec SETTINGS_INVALID / SETTINGS_UNREADABLE) sans rien changer. */
-  checkSettingsFile(path: string): Promise<void>;
+  checkSettingsFile(path: string): Promise<{ root_dir: string | null }>;
   /** Adopte le fichier à l'emplacement courant puis recharge l'application. */
   loadSettingsFile(path: string): Promise<void>;
   confirm(message: string, okLabel: string): Promise<boolean>;
@@ -123,15 +123,17 @@ export function mountSettingsTab(host: HTMLElement, deps: SettingsTabDeps): Sett
 
   const onLoad = guard(async () => {
     let path: string | null;
+    let incoming: { root_dir: string | null };
     try {
       path = await deps.pickSettingsFile();
       if (!path) return;
-      await deps.checkSettingsFile(path); // invalide : on le dit avant de demander quoi que ce soit
+      incoming = await deps.checkSettingsFile(path); // invalide : on le dit avant de demander quoi que ce soit
     } catch (e) {
       fail("settings.file.loadFailed", e);
       return;
     }
-    if (!(await deps.confirm(t("settings.file.loadConfirm"), t("settings.file.loadOk")))) return;
+    const message = t("settings.file.loadConfirmRoot", { root: incoming.root_dir ?? t("settings.file.loadNoRoot") });
+    if (!(await deps.confirm(message, t("settings.file.loadOk")))) return;
     try {
       await deps.loadSettingsFile(path);
     } catch (e) {

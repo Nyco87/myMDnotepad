@@ -23,6 +23,13 @@ export async function getSettings(): Promise<Settings> {
   return s;
 }
 
+/** Met à jour seulement les champs donnés (fusion côté Rust sous verrou : ne ré-écrit jamais les autres réglages). */
+export async function updateSettings(patch: Partial<Settings>): Promise<Settings> {
+  const s = await invoke<Settings>("update_settings", { patch });
+  root = s.root_dir;
+  return s;
+}
+
 export async function saveSettings(settings: Settings): Promise<void> {
   await invoke<void>("save_settings", { settings });
   root = settings.root_dir;
@@ -133,8 +140,8 @@ export function moveSettings(destDir: string): Promise<SettingsLocation> {
   return invoke<SettingsLocation>("move_settings", { destDir });
 }
 /** Valide un fichier de réglages sans rien changer (rejette SETTINGS_UNREADABLE / SETTINGS_INVALID). */
-export function checkSettingsFile(path: string): Promise<void> {
-  return invoke<void>("check_settings_file", { path });
+export function checkSettingsFile(path: string): Promise<Settings> {
+  return invoke<Settings>("check_settings_file", { path });
 }
 /** Adopte un fichier de réglages à l'emplacement courant (remplace les réglages actuels). */
 export function loadSettingsFile(path: string): Promise<Settings> {

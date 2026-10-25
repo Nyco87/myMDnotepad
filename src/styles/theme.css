@@ -395,7 +395,7 @@ body {
   width: 340px; padding: 18px 20px 14px; background: #2b2b2b; border: 1px solid var(--border);
   border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
-.confirm-message { margin: 0 0 16px; font-size: 14px; line-height: 1.4; }
+.confirm-message { white-space: pre-line; margin: 0 0 16px; font-size: 14px; line-height: 1.4; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .confirm-actions button {
   padding: 6px 14px; border: 1px solid var(--border); border-radius: 4px;

@@ -14,7 +14,7 @@ import {
   readNote,
   markReady,
   rootStatus,
-  saveSettings,
+  updateSettings,
   setTransparency,
   writeNote,
   type RootStatus,
@@ -118,7 +118,7 @@ async function main(): Promise<void> {
         // Relire les réglages : le bandeau enregistre aussi (emojis récents).
         const s = await getSettings();
         if (s.active_tab === active && s.open_tabs.length === open.length && s.open_tabs.every((r, i) => r === open[i])) return;
-        await saveSettings({ ...s, open_tabs: open, active_tab: active });
+        await updateSettings({ open_tabs: open, active_tab: active });
       })
       .catch((e) => toast(t("main.sessionNotSaved", { err: errorText(e) })));
     return persistChain;
@@ -182,8 +182,7 @@ async function main(): Promise<void> {
     }
     try {
       restoring = true; // plus aucune écriture de session pendant le changement
-      const s = await getSettings();
-      await saveSettings({ ...s, open_tabs: [], active_tab: null });
+      await updateSettings({ open_tabs: [], active_tab: null });
       sessionStorage.setItem(CHANGE_ROOT_KEY, "1");
     } catch (e) {
       restoring = false;
@@ -245,8 +244,7 @@ async function main(): Promise<void> {
         setTransparency: setTransparencyLive,
         setLanguage: async (lang) => {
           setLanguage(lang);
-          const s = await getSettings(); // relire : ne jamais écraser d'autres réglages avec une copie périmée
-          await saveSettings({ ...s, language: lang });
+          await updateSettings({ language: lang }); // fusion côté Rust : aucun autre réglage n'est ré-écrit
         },
         openExternal,
         version: getVersion,
