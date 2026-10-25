@@ -130,10 +130,13 @@ export function createTabs(o: TabsOptions): TabsController {
   const unreadableMessage = (rel: string): string =>
     `La note « ${noteTitle(rel)} » ne peut pas être lue sur le disque : ses modifications sont gardées en mémoire.`;
   /** Note illisible avec des modifications en attente : demande s'il faut les abandonner (true = abandonnées). */
-  const discardUnreadable = async (tab: Tab, ok: string, question: string): Promise<boolean> => {
-    if (tab.unreadable === null || !tab.saver.pending()) return true;
-    if (!(await askDiscard(`${unreadableMessage(tab.rel)} ${question}`, ok))) return false;
-    tab.saver.discard();
+  const discardUnreadable = async (list: Tab[], ok: string, question: string): Promise<boolean> => {
+    // Toutes les confirmations d'abord ; on n'abandonne rien tant qu'une seule a été refusée.
+    const risky = list.filter((t) => t.unreadable !== null && t.saver.pending());
+    for (const t of risky) {
+      if (!(await askDiscard(`${unreadableMessage(t.rel)} ${question}`, ok))) return false;
+    }
+    for (const t of risky) t.saver.discard();
     return true;
   };
   /** Message pour un enregistrement raté ; rien pour une note illisible (le bandeau l'explique déjà). */
@@ -441,7 +444,7 @@ export function createTabs(o: TabsOptions): TabsController {
     async close(rel) {
       const tab = find(rel);
       if (!tab) return true;
-      if (!(await discardUnreadable(tab, "Fermer sans enregistrer", "Fermer sans enregistrer ?"))) return false;
+      if (!(await discardUnreadable([tab], "Fermer sans enregistrer", "Fermer sans enregistrer ?"))) return false;
       try {
         // Des frappes pendant l'enregistrement peuvent remettre du contenu en file : on recommence (borné).
         for (let i = 0; i < 5 && (tab.saver.pending() || tab.conflicts.length > 0); i++) {
@@ -493,10 +496,10 @@ export function createTabs(o: TabsOptions): TabsController {
     },
 
     async flushAll() {
-      for (const t of tabs.slice()) {
-        if (!(await discardUnreadable(t, "Fermer sans enregistrer", "Fermer sans enregistrer ?"))) {
-          throw new Error(unreadableMessage(t.rel));
-        }
+      const all = tabs.slice();
+      if (!(await discardUnreadable(all, "Fermer sans enregistrer", "Fermer sans enregistrer ?"))) {
+        const t = all.find((x) => x.unreadable !== null && x.saver.pending()) ?? all[0];
+        throw new Error(unreadableMessage(t.rel));
       }
       const results = await Promise.allSettled(
         tabs.map(async (t) => {
@@ -504,8 +507,10 @@ export function createTabs(o: TabsOptions): TabsController {
           await settleConflicts(t);
         }),
       );
-      const failed = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
-      if (failed) throw new Error(friendly("", failed.reason));
+      const failedIdx = results.findIndex((r) => r.status === "rejected");
+      if (failedIdx >= 0) {
+        throw new Error(friendly(tabs[failedIdx]?.rel ?? "", (results[failedIdx] as PromiseRejectedResult).reason));
+      }
     },
 
     list: () => tabs.map((t) => t.rel),
@@ -535,10 +540,11 @@ export function createTabs(o: TabsOptions): TabsController {
       // D'abord enregistrer les frappes en file : une écriture faite après le renommage partirait de l'ancien contenu
       // (anciens liens d'images). Si l'enregistrement échoue, on refuse : l'appelant annule l'opération.
       const held = tabs.filter((t) => under(t.rel, prefix));
+      if (!(await discardUnreadable(held, "Continuer sans enregistrer", "Continuer sans enregistrer ?"))) {
+        const t = held.find((x) => x.unreadable !== null && x.saver.pending()) ?? held[0];
+        throw new Error(`${unreadableMessage(t.rel)} Opération annulée.`);
+      }
       for (const t of held) {
-        if (!(await discardUnreadable(t, "Continuer sans enregistrer", "Continuer sans enregistrer ?"))) {
-          throw new Error(`${unreadableMessage(t.rel)} Opération annulée.`);
-        }
         try {
           await t.saver.flush();
         } catch (e) {

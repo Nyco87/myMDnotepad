@@ -321,6 +321,28 @@ describe("tabs controller", () => {
     expect(io.writeNote).not.toHaveBeenCalled();
   });
 
+  it("flushAll_asks_all_confirms_before_discarding_any", async () => {
+    const tabs = setup();
+    put("a.md", "x");
+    put("b.md", "y");
+    await tabs.open("a.md");
+    await tabs.open("b.md");
+    const real = io.readNote.getMockImplementation()!;
+    io.readNote.mockImplementation(async () => {
+      throw NOT_UTF8;
+    });
+    await tabs.externalChange(["a.md", "b.md"]);
+    editors.get("a.md")!.type("local-a");
+    editors.get("b.md")!.type("local-b");
+    confirmDiscard.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    await expect(tabs.flushAll()).rejects.toThrow(/ne peut pas être lue sur le disque/);
+    expect(confirmDiscard).toHaveBeenCalledTimes(2);
+    // L'onglet a.md n'a rien perdu : une fois la lecture rétablie, ses modifications sont enregistrées.
+    io.readNote.mockImplementation(real);
+    await tabs.retryRead("a.md");
+    await vi.waitFor(() => expect(disk.get("a.md")!.content).toBe("local-a"));
+  });
+
   it("unreadable_note_is_retried_on_each_fs_change", async () => {
     const tabs = setup();
     await tabs.open("a.md");
