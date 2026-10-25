@@ -5,16 +5,21 @@
 <h1 align="center">myMDnotepad</h1>
 
 <p align="center">
+  <a href="https://github.com/Nyco87/myMDnotepad/releases"><img src="https://img.shields.io/github/package-json/v/Nyco87/myMDnotepad?label=version&color=FBC02D" alt="Version"></a>
+  <a href="https://claude.com/claude-code"><img src="https://img.shields.io/badge/Built%20with-Claude%20Code-D97757?logo=claude&logoColor=white" alt="Built with Claude Code"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <br>
   <a href="https://github.com/Nyco87/myMDnotepad/actions/workflows/ci.yml"><img src="https://github.com/Nyco87/myMDnotepad/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://codecov.io/gh/Nyco87/myMDnotepad"><img src="https://codecov.io/gh/Nyco87/myMDnotepad/graph/badge.svg" alt="Coverage"></a>
   <a href="https://github.com/Nyco87/myMDnotepad/security/code-scanning"><img src="https://github.com/Nyco87/myMDnotepad/actions/workflows/codeql.yml/badge.svg?branch=main" alt="CodeQL"></a>
-  <img src="https://img.shields.io/badge/version-0.1.0-FBC02D" alt="Version 0.1.0">
-  <img src="https://img.shields.io/badge/Windows-11-0078D4?logo=windows11&logoColor=white" alt="Windows 11">
-  <img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2">
-  <img src="https://img.shields.io/badge/Rust-stable-B7410E?logo=rust&logoColor=white" alt="Rust">
-  <img src="https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
-  <img src="https://img.shields.io/badge/portable-sans%20installation-5E4200" alt="Portable">
-  <img src="https://img.shields.io/badge/licence-MIT-green" alt="Licence MIT">
+  <a href="https://github.com/Nyco87/myMDnotepad/commits/main"><img src="https://img.shields.io/github/last-commit/Nyco87/myMDnotepad" alt="Last commit"></a>
+  <br>
+  <img src="https://img.shields.io/badge/Windows%2011-0078D4?logo=windows11&logoColor=white" alt="Windows 11">
+  <img src="https://img.shields.io/badge/Tauri%202-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2">
+  <img src="https://img.shields.io/badge/Rust-000000?logo=rust&logoColor=white" alt="Rust">
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white" alt="Vite">
+  <img src="https://img.shields.io/badge/Mermaid-FF3670?logo=mermaid&logoColor=white" alt="Mermaid">
 </p>
 
 <p align="center">
