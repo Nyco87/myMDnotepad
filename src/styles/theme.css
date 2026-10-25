@@ -133,7 +133,15 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
-.ProseMirror-gapcursor:after { border-top: 1px solid var(--text); }
+/* Curseur d'espacement entre deux blocs sans texte : trait horizontal clignotant, couleur d'accent. */
+.ProseMirror-gapcursor { display: none; pointer-events: none; position: absolute; }
+.ProseMirror-gapcursor:after {
+  content: ""; display: block; position: absolute; top: -2px; width: 28px;
+  border-top: 2px solid var(--accent); border-radius: 1px;
+  animation: ProseMirror-cursor-blink 1.1s steps(2, start) infinite;
+}
+@keyframes ProseMirror-cursor-blink { to { visibility: hidden; } }
+.ProseMirror-focused .ProseMirror-gapcursor { display: block; }
 
 /* ---- GitHub alerts ---- */
 .ProseMirror .alert { border-left: 4px solid var(--alert-color); border-radius: 8px; padding: 10px 14px; margin: 0.8em 0; background: var(--alert-bg); }

@@ -15,6 +15,7 @@ import { tableControlsPlugin } from "./tables";
 import { imageNodeView, imagePastePlugin } from "./images";
 import { taskItemView } from "./task-item";
 import { alertView } from "./alerts";
+import { gapClickPlugin } from "./gap-click";
 import { slashMenuPlugin, type SlashCommand } from "./slash";
 import { parseMarkdown } from "../markdown/parse";
 import { serializeMarkdown } from "../markdown/serialize";
@@ -53,6 +54,7 @@ function buildPlugins(schema: Schema, opts: EditorOptions): Plugin[] {
     buildKeymap(schema),
     keymap(baseKeymap),
     dropCursor(),
+    gapClickPlugin(),
     gapCursor(),
     columnResizing(),
     tableEditing(),

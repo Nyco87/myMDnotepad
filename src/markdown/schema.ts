@@ -49,6 +49,7 @@ export const nodes: Record<string, NodeSpec> = {
     content: "block+",
     group: "block",
     defining: true,
+    createGapCursor: true,
     parseDOM: [
       {
         tag: "div[data-alert]",
@@ -68,6 +69,7 @@ export const nodes: Record<string, NodeSpec> = {
     group: "block",
     code: true,
     defining: true,
+    createGapCursor: true,
     parseDOM: [
       {
         tag: "pre",
