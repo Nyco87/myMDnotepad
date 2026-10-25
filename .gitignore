@@ -6,3 +6,13 @@ src-tauri/gen/
 mymdnotepad.settings.json
 mdnote.settings.json
 coverage/
+
+# Documents de travail (conceptions, plans, note de reprise) : gardés en local uniquement
+docs/
+
+# Icônes générées par `tauri icon` mais inutiles (Microsoft Store, Android, iOS)
+src-tauri/icons/Square*Logo.png
+src-tauri/icons/StoreLogo.png
+src-tauri/icons/64x64.png
+src-tauri/icons/android/
+src-tauri/icons/ios/
