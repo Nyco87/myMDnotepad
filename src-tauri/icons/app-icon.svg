@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 64 64">
+  <!-- Icône myMDnotepad (V9, « post-it vif ») : post-it carré à coin corné, « M » + « D> », crayon à 45° touchant le D. -->
+  <defs>
+    <linearGradient id="note" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFEB3B"/><stop offset="1" stop-color="#FBC02D"/></linearGradient>
+    <linearGradient id="fold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E0A000"/><stop offset=".55" stop-color="#FFEB3B"/><stop offset="1" stop-color="#FFFBE0"/></linearGradient>
+    <linearGradient id="pen" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2B88D8"/><stop offset=".5" stop-color="#1A73C9"/><stop offset="1" stop-color="#0F5FA8"/></linearGradient>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="1.6" stdDeviation="1.8" flood-color="#000" flood-opacity=".3"/></filter>
+  </defs>
+  <g filter="url(#sh)">
+    <path d="M10 6h32l16 16v32a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4z" fill="url(#note)"/>
+    <path d="M42 6v12a4 4 0 0 0 4 4h12z" fill="url(#fold)"/>
+  </g>
+  <text x="11" y="40.2" font-family="Segoe UI Variable Display, Segoe UI Variable, Segoe UI Black, Segoe UI" font-weight="800" font-size="21" fill="#5E4200">M</text>
+  <text x="29.7" y="40.2" font-family="Cascadia Code, Consolas, monospace" font-weight="700" font-size="19.5" fill="#5E4200">D&gt;</text>
+  <g transform="translate(36.4 28) rotate(225)" filter="url(#sh)">
+    <path d="M-1.8 7h3.6V26.7h-3.6z" fill="url(#pen)"/>
+    <path d="M-1.8 7h3.6L0 1z" fill="#F3D9A4"/>
+    <path d="M-.6 3h1.2L0 1z" fill="#333"/>
+  </g>
+</svg>
