@@ -1,5 +1,6 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 export type Settings = {
   root_dir: string | null;
@@ -93,6 +94,11 @@ export function importImage(noteRel: string, srcAbs: string): Promise<string> {
 /** Abonnement aux changements du dossier de notes (chemins relatifs). Renvoie la fonction de désabonnement. */
 export function onFsChanged(cb: (paths: string[]) => void): Promise<() => void> {
   return listen<{ paths: string[] }>("fs-changed", (e) => cb(e.payload.paths));
+}
+
+/** Ouvre une URL http(s) / mailto dans le navigateur par défaut (la capacité Tauri refuse tout autre schéma). */
+export function openExternal(url: string): Promise<void> {
+  return openUrl(url);
 }
 
 /** Couleur d'accent de Windows, `#rrggbb`. */

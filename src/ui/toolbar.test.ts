@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { themeCss } from "../test-support/theme-css";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../api", () => ({
@@ -67,9 +66,8 @@ describe("toolbar", () => {
   });
 
   it("highlight_button_swatch_uses_the_same_tint_as_the_mark", () => {
-    const css = readFileSync(resolve(__dirname, "../styles/theme.css"), "utf8");
-    const mark = /\.ProseMirror mark \{[^}]*background: ([^;]+);/.exec(css)![1];
-    const btn = /\.tb-btn\.b-highlight \{[^}]*\}/.exec(css)![0];
+    const mark = /\.ProseMirror mark \{[^}]*background: ([^;]+);/.exec(themeCss())![1];
+    const btn = /\.tb-btn\.b-highlight \{[^}]*\}/.exec(themeCss())![0];
     expect(btn).toContain(`transparent 60%, ${mark} 60%`);
   });
 

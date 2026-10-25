@@ -35,6 +35,7 @@ pub fn run() {
     let _ = START.set(Instant::now());
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             mark_ready,
             accent::get_accent_color,

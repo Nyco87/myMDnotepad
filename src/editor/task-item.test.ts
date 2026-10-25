@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { themeCss } from "../test-support/theme-css";
 import { makeEditor } from "./test-helpers";
 
 describe("task_item node view", () => {
@@ -19,12 +18,11 @@ describe("task_item node view", () => {
   });
 
   it("checkbox_is_themed_dark_with_an_accent_check_mark", () => {
-    const css = readFileSync(resolve(__dirname, "../styles/theme.css"), "utf8");
-    const box = /\.ProseMirror \.task-box \{[^}]*\}/.exec(css)![0];
+    const box = /\.ProseMirror \.task-box \{[^}]*\}/.exec(themeCss())![0];
     expect(box).toContain("appearance: none");
     expect(box).toContain("background: #2b2b2b");
     expect(box).toContain("1px solid #6b6b6b");
-    expect(/\.task-box:checked::after \{[^}]*var\(--accent\)/.test(css)).toBe(true);
-    expect(/\.task-box:hover \{[^}]*border-color/.test(css)).toBe(true);
+    expect(/\.task-box:checked::after \{[^}]*var\(--accent\)/.test(themeCss())).toBe(true);
+    expect(/\.task-box:hover \{[^}]*border-color/.test(themeCss())).toBe(true);
   });
 });

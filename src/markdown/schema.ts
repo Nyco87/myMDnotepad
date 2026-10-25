@@ -261,7 +261,7 @@ export const marks: Record<string, MarkSpec> = {
         },
       },
     ],
-    toDOM: (mark) => ["a", { href: mark.attrs.href, title: mark.attrs.title }, 0],
+    toDOM: (mark) => ["a", { href: mark.attrs.href, title: mark.attrs.title || "Ctrl+clic pour ouvrir" }, 0],
   },
 
   code: {

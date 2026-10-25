@@ -3,6 +3,7 @@ import {
   createNote,
   getSettings,
   onFsChanged,
+  openExternal,
   readNote,
   markReady,
   rootStatus,
@@ -21,7 +22,7 @@ import { initAccent } from "./ui/accent";
 import { showContextMenu } from "./ui/context-menu";
 import { showFirstRun } from "./ui/first-run";
 import { mountSidebar, type SidebarHandle } from "./ui/sidebar";
-import { createTabs, noteTitle, type TabsController } from "./ui/tabs";
+import { createTabs, NOT_FOUND, noteTitle, type TabsController } from "./ui/tabs";
 import { mountTitlebar } from "./ui/titlebar";
 import { mountToast } from "./ui/toast";
 import { mountToolbar, type ToolbarHandle } from "./ui/toolbar";
@@ -234,6 +235,20 @@ async function main(): Promise<void> {
     releaseDiagramRendering();
   };
 
+  /** Ctrl+clic sur un lien vers une note : l'ouvre dans un onglet, ou signale qu'elle n'existe pas. */
+  const openLinkedNote = async (rel: string): Promise<void> => {
+    if (!tabs) return;
+    if (!tabs.list().includes(rel)) {
+      try {
+        await readNote(rel);
+      } catch (e) {
+        if (errText(e) === NOT_FOUND) return toast(`Note introuvable : ${rel}`);
+        // autre erreur : tabs.open la signalera elle-même
+      }
+    }
+    if (await tabs.open(rel)) focusEditor();
+  };
+
   /** Monte l'espace de travail (onglets, bandeau, arborescence) pour le dossier courant. */
   const startWorkspace = async (settings: Settings): Promise<void> => {
     app.classList.remove("no-root");
@@ -255,6 +270,10 @@ async function main(): Promise<void> {
       io: { readNote, writeNote, createNote },
       makeEditor: (mount, opts) => {
         opts.onError = toast;
+        opts.links = () => ({
+          openExternal: (url) => void openExternal(url).catch((e) => toast(`Ouverture du lien impossible : ${errText(e)}`)),
+          openNote: (rel) => void openLinkedNote(rel),
+        });
         opts.slashCommands = () => slashCommands;
         const editor = createEditor(mount, opts);
         // Clic sur un dessin : l'atelier s'ouvre avec son code (chargé à la demande, comme mermaid).

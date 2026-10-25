@@ -28,6 +28,7 @@ trash = "5"
 tauri-plugin-dialog = "2"
 notify-debouncer-mini = "0.6"
 windows = { version = "0.62", features = ["UI_ViewManagement", "Foundation"] }
+tauri-plugin-opener = "2"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

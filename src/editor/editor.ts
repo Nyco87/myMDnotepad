@@ -16,6 +16,7 @@ import { imageNodeView, imagePastePlugin } from "./images";
 import { taskItemView } from "./task-item";
 import { alertView } from "./alerts";
 import { codeBlockView, type EditDiagram } from "./mermaid-view";
+import { linkKeymap, linkOpenPlugin, type LinkHandlers } from "./links";
 import { gapClickPlugin } from "./gap-click";
 import { slashMenuPlugin, type SlashCommand } from "./slash";
 import { parseMarkdown } from "../markdown/parse";
@@ -41,6 +42,8 @@ export interface EditorOptions {
   slashCommands?: () => SlashCommand[];
   /** Click on a mermaid diagram: position of its code block and its code. Read lazily. */
   onEditDiagram?: EditDiagram;
+  /** Ctrl+clic sur un lien : navigateur ou autre note. Read lazily; sans lui le Ctrl+clic ne fait rien. */
+  links?: () => LinkHandlers;
 }
 
 /**
@@ -48,6 +51,7 @@ export interface EditorOptions {
  * table controls (task 9), toolbar/image paste (task 10).
  */
 function buildPlugins(schema: Schema, opts: EditorOptions): Plugin[] {
+  const linkContext = () => ({ noteRel: opts.noteRel, handlers: opts.links?.() });
   return [
     // First: while the « / » menu is open it takes the arrow / Enter / Escape keys before the keymaps.
     slashMenuPlugin(() => opts.slashCommands?.() ?? []),
@@ -55,6 +59,8 @@ function buildPlugins(schema: Schema, opts: EditorOptions): Plugin[] {
     buildInputRules(schema),
     // Before baseKeymap: sticky-block Enter/ArrowDown must win over the defaults.
     buildKeymap(schema),
+    linkKeymap(linkContext),
+    linkOpenPlugin(linkContext),
     keymap(baseKeymap),
     dropCursor(),
     gapClickPlugin(),
