@@ -12,6 +12,7 @@ import {
   type Settings,
 } from "./api";
 import type { EditorView } from "prosemirror-view";
+import { editDiagramAt } from "./diagram/insert";
 import { createEditor } from "./editor/editor";
 import { cursorAnchor } from "./editor/slash";
 import { buildSlashCommands } from "./editor/slash-commands";
@@ -233,7 +234,7 @@ async function main(): Promise<void> {
       link: viaToolbar("link"),
       image: viaToolbar("image"),
       symbols: viaToolbar("emoji"),
-      // `diagram` : branché avec l'atelier de schémas (Task 9).
+      diagram: viaToolbar("diagram"),
     });
 
     tabs = createTabs({
@@ -242,7 +243,10 @@ async function main(): Promise<void> {
       makeEditor: (mount, opts) => {
         opts.onError = toast;
         opts.slashCommands = () => slashCommands;
-        return createEditor(mount, opts);
+        const editor = createEditor(mount, opts);
+        // Clic sur un dessin : l'atelier s'ouvre avec son code (chargé à la demande, comme mermaid).
+        opts.onEditDiagram = (pos, code) => void editDiagramAt(editor.view, pos, code, toast);
+        return editor;
       },
       notify: toast,
       onChange: onTabsChange,

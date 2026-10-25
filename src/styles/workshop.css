@@ -1,0 +1,82 @@
+/* ---- Atelier de schémas ---- */
+.ws-overlay {
+  position: fixed; inset: 0; z-index: 1900; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+.ws {
+  display: flex; flex-direction: column; width: min(940px, 94vw); height: min(620px, 90vh);
+  background: #202020; color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55); overflow: hidden; outline: none;
+}
+.ws-head { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid #333; }
+.ws-title { font-size: 14px; }
+.ws-subtitle { color: #999; }
+.ws-body { display: flex; flex: 1; min-height: 0; }
+.ws-left { width: 52%; padding: 14px; border-right: 1px solid #333; overflow-y: auto; }
+.ws-right {
+  flex: 1; min-width: 0; padding: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; background: #1b1b1b; overflow: auto;
+}
+.ws-preview-svg { max-width: 100%; }
+.ws-preview-svg svg { max-width: 100%; height: auto; }
+.ws-preview-msg { color: #9a9a9a; font-size: 12px; text-align: center; white-space: pre-wrap; }
+.ws-preview-msg.ws-preview-error { color: #f0a09a; text-align: left; max-height: 40%; overflow: auto; }
+.ws-foot { display: flex; justify-content: space-between; padding: 10px 14px; border-top: 1px solid #333; }
+.ws-actions { display: flex; gap: 8px; }
+.ws-btn {
+  padding: 6px 14px; border: 1px solid #444; border-radius: 5px; background: #2c2c2c; color: var(--text);
+  font: inherit; cursor: pointer;
+}
+.ws-btn:hover:not(:disabled) { background: #363636; }
+.ws-btn:disabled { opacity: 0.45; cursor: default; }
+.ws-btn.ws-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+.ws-btn.ws-primary:hover:not(:disabled) { background: var(--accent-hover); }
+.ws-btn.ws-primary:active:not(:disabled) { background: var(--accent-pressed); }
+.ws button:focus-visible, .ws input:focus-visible, .ws select:focus-visible, .ws textarea:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+
+.ws-types { display: flex; flex-wrap: wrap; gap: 10px; }
+.ws-type {
+  flex: 1 1 40%; border: 1px solid #3a3a3a; border-radius: 8px; padding: 14px 12px; text-align: center;
+  background: #2a2a2a; color: var(--text); font: inherit; cursor: pointer;
+}
+.ws-type:hover { border-color: var(--accent); background: var(--accent-tint-12); }
+.ws-type-icon { display: block; font-size: 26px; margin-bottom: 6px; }
+
+.ws-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #999; margin: 12px 0 6px; }
+.ws-lbl:first-child { margin-top: 0; }
+.ws-inline-lbl { color: #bbb; }
+.ws-hint { color: #999; font-size: 12px; margin: 4px 0 2px; }
+.ws-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+.ws-in, .ws-sel {
+  background: #2c2c2c; border: 1px solid #444; border-radius: 4px; padding: 4px 8px; color: var(--text); font: inherit;
+  min-width: 0;
+}
+.ws-in { flex: 1; }
+.ws-sel { flex: 0 1 auto; max-width: 40%; padding: 4px 6px; }
+.ws-in.ws-num { flex: 0 0 56px; }
+.ws-in.ws-short { flex: 0 0 90px; }
+.ws-in.ws-date { flex: 0 0 104px; }
+.ws-arrow { color: #888; }
+.ws-tools { display: inline-flex; gap: 2px; margin-left: auto; }
+.ws-ib {
+  width: 24px; height: 24px; padding: 0; border: none; border-radius: 4px; background: transparent; color: #aaa;
+  font: inherit; cursor: pointer;
+}
+.ws-ib:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); color: var(--text); }
+.ws-ib:disabled { opacity: 0.3; cursor: default; }
+.ws-ib.ws-del:hover:not(:disabled) { color: #ff9b9b; }
+.ws-add { background: none; border: none; padding: 4px 0; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; }
+.ws-add:disabled { opacity: 0.4; cursor: default; }
+.ws-error { color: #ff9b9b; font-size: 11px; }
+.ws-error:empty { display: none; }
+.ws-row-errors { margin: -2px 0 6px; }
+.ws-check { display: inline-flex; align-items: center; gap: 4px; margin-right: 12px; color: var(--text); }
+.ws-checks { margin-top: 4px; }
+.ws-section { border-left: 2px solid var(--accent-tint-35); padding-left: 10px; margin: 12px 0; }
+.ws-code {
+  width: 100%; height: 100%; min-height: 240px; box-sizing: border-box; resize: none; background: #1b1b1b;
+  color: var(--text); border: 1px solid #444; border-radius: 4px; padding: 8px 10px;
+  font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; line-height: 1.5; white-space: pre; tab-size: 4;
+}

@@ -30,7 +30,7 @@ describe("toolbar", () => {
   it("has the buttons in the specified order with French tooltips", () => {
     const { el } = setup("a\n");
     const ids = [...el.querySelectorAll<HTMLElement>(".tb-btn")].map((b) => b.dataset.id);
-    expect(ids).toEqual(["bold", "italic", "strike", "highlight", "code", "heading", "bullet", "ordered", "task", "quote", "alert", "codeblock", "table", "link", "image", "hr", "emoji"]);
+    expect(ids).toEqual(["bold", "italic", "strike", "highlight", "code", "heading", "bullet", "ordered", "task", "quote", "alert", "codeblock", "table", "link", "image", "hr", "diagram", "emoji"]);
     expect((el.querySelector("[data-id=bold]") as HTMLElement).title).toBe("Gras (Ctrl+B)");
   });
 
@@ -50,6 +50,18 @@ describe("toolbar", () => {
     btn("alert").click();
     (document.querySelectorAll(".ctx-menu button")[4] as HTMLElement).click();
     expect(ed.getMarkdown()).toBe("> [!CAUTION]\n> texte\n");
+  });
+
+  it("diagram button sits before Symboles and opens the workshop", async () => {
+    const { btn, el } = setup("a\n");
+    const ids = [...el.querySelectorAll<HTMLElement>(".tb-btn")].map((b) => b.dataset.id);
+    expect(ids.indexOf("diagram")).toBe(ids.indexOf("emoji") - 1);
+    expect(btn("diagram").title).toBe("Schéma");
+    expect(btn("diagram").textContent).toBe("🔀");
+    btn("diagram").click();
+    await vi.waitFor(() => expect(document.querySelector(".ws-overlay")).not.toBeNull());
+    (document.querySelector(".ws-cancel") as HTMLElement).click();
+    expect(document.querySelector(".ws-overlay")).toBeNull();
   });
 
   it("symbols_button_uses_omega_and_tooltip", () => {

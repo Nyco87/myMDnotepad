@@ -13,6 +13,7 @@ import {
   wrapIn,
 } from "../editor/keymap";
 import { pickAndInsertImage } from "../editor/images";
+import { createDiagram } from "../diagram/insert";
 import { ALERTS, insertAlert } from "../editor/alerts";
 import { ALERT_KINDS } from "../markdown/alert-kinds";
 import { insertTable, pickTableSize } from "../editor/tables";
@@ -296,6 +297,12 @@ export function mountToolbar(
       { id: "hr", label: "―", title: "Ligne horizontale", command: () => insertHorizontalRule() },
     ],
     [
+      {
+        id: "diagram",
+        label: "🔀",
+        title: "Schéma",
+        run: (_btn, view) => createDiagram(view, onError),
+      },
       {
         id: "emoji",
         label: "Ω",
