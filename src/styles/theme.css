@@ -82,7 +82,17 @@ body {
 .ProseMirror li[data-type="task_item"] { display: flex; align-items: flex-start; gap: 0.5em; margin-left: 0; }
 .ProseMirror li[data-type="task_item"] > .task-content { flex: 1; min-width: 0; }
 .ProseMirror li[data-type="task_item"] > .task-content > p:first-child { margin-top: 0; }
-.ProseMirror .task-box { margin: 0.35em 0 0; accent-color: var(--accent); cursor: pointer; flex: none; }
+.ProseMirror .task-box {
+  appearance: none; -webkit-appearance: none; flex: none; box-sizing: border-box; position: relative;
+  width: 16px; height: 16px; margin: 0.3em 0 0; border: 1px solid #6b6b6b; border-radius: 3px;
+  background: #2b2b2b; cursor: pointer;
+}
+.ProseMirror .task-box:hover { border-color: #8e8e8e; }
+.ProseMirror .task-box:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ProseMirror .task-box:checked::after {
+  content: ""; position: absolute; left: 4px; top: 0.5px; width: 4px; height: 8px;
+  border: solid var(--accent); border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
 .ProseMirror li[data-type="task_item"][data-checked="true"] > .task-content > p:first-child { color: #9a9a9a; }
 .ProseMirror table {
   border-collapse: collapse;
@@ -356,6 +366,7 @@ body {
   position: relative; display: flex; align-items: center; gap: 4px;
   min-height: 26px; padding-right: 8px; border-radius: 4px; cursor: default; user-select: none; color: var(--text);
 }
+.sb-row.folder { color: var(--accent); font-weight: 700; font-style: italic; }
 .sb-row:hover { background: rgba(255, 255, 255, 0.07); }
 .sb-row.selected { background: var(--accent-tint-12); }
 .sb-row.selected::before {

@@ -71,6 +71,21 @@ export function validateModel(m: DiagramModel): ModelError[] {
   return errors;
 }
 
+/** Total des parts valides d'un camembert (arrondi à 2 décimales pour éviter 99.99999). */
+export function pieTotal(m: { slices: { value: number }[] }): number {
+  const sum = m.slices.reduce((a, s) => a + (Number.isFinite(s.value) && s.value > 0 ? s.value : 0), 0);
+  return Math.round(sum * 100) / 100;
+}
+
+/** Avertissements qui n'empêchent pas d'insérer le schéma (même forme que les erreurs). */
+export function validateWarnings(m: DiagramModel): ModelError[] {
+  if (m.kind === "pie") {
+    const total = pieTotal(m);
+    if (total > 100) return [{ where: "pie.total", message: `Le total dépasse 100 (actuellement ${total}).` }];
+  }
+  return [];
+}
+
 /** Écrit les messages dans les éléments `[data-where]` de `root` (vide ceux sans erreur). */
 export function paintErrors(root: HTMLElement, errors: ModelError[]): void {
   const byWhere = new Map<string, string>();

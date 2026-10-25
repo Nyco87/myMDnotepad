@@ -71,6 +71,8 @@
 .ws-add:disabled { opacity: 0.4; cursor: default; }
 .ws-error { color: #ff9b9b; font-size: 11px; }
 .ws-error:empty { display: none; }
+.ws-warning { color: #f5b062; font-size: 11px; margin-top: 4px; }
+.ws-warning:empty { display: none; }
 .ws-row-errors { margin: -2px 0 6px; }
 .ws-check { display: inline-flex; align-items: center; gap: 4px; margin-right: 12px; color: var(--text); }
 .ws-checks { margin-top: 4px; }

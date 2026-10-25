@@ -1,12 +1,16 @@
 import type { PieModel } from "../model";
-import { paintErrors, validateModel } from "../validate";
+import { paintErrors, validateModel, validateWarnings } from "../validate";
 import { addButton, clone, el, errorSlot, label, moveItem, rowTools, textInput } from "./ui";
 
 /** Briques du camembert : un titre et des parts (libellé, valeur ≥ 0). Renvoie la fonction de démontage. */
 export function mountPieEditor(root: HTMLElement, model: PieModel, onChange: (m: PieModel) => void): () => void {
   const m = clone(model);
+  const paint = (): void => {
+    // Les avertissements (total > 100) sont non bloquants : ton orange, « Insérer » reste actif.
+    paintErrors(root, [...validateModel(m), ...validateWarnings(m)]);
+  };
   const emit = (): void => {
-    paintErrors(root, validateModel(m));
+    paint();
     onChange(clone(m));
   };
 
@@ -57,7 +61,11 @@ export function mountPieEditor(root: HTMLElement, model: PieModel, onChange: (m:
       }),
     );
     root.appendChild(errorSlot("model"));
-    paintErrors(root, validateModel(m));
+    const warn = errorSlot("pie.total");
+    warn.classList.replace("ws-error", "ws-warning");
+    warn.setAttribute("role", "status");
+    root.appendChild(warn);
+    paint();
   };
   render();
   return () => {

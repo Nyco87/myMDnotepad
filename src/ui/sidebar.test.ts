@@ -48,6 +48,8 @@ vi.mock("./context-menu", () => ({ showContextMenu: vi.fn() }));
 
 import * as api from "../api";
 import { showContextMenu } from "./context-menu";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { mountSidebar } from "./sidebar";
 
 const flush = async () => {
@@ -88,6 +90,18 @@ describe("sidebar", () => {
     expect(first.textContent).toContain("Ctrl+N");
     expect(el.querySelector('[data-path="Courses.md"]')?.textContent).toContain("Courses");
     expect(el.querySelector('[data-path="Courses.md"]')?.textContent).not.toContain(".md");
+  });
+
+  it("folder_rows_carry_the_folder_class_and_are_styled_in_accent_bold_italic", async () => {
+    const { row } = await setup();
+    expect(row("Projets").classList.contains("folder")).toBe(true);
+    expect(row("Courses.md").classList.contains("folder")).toBe(false);
+    const css = readFileSync(resolve(__dirname, "../styles/theme.css"), "utf8");
+    const rule = /\.sb-row\.folder \{[^}]*\}/.exec(css)![0];
+    expect(rule).toContain("color: var(--accent)");
+    expect(rule).toContain("font-weight: 700");
+    expect(rule).toContain("font-style: italic");
+    expect(/\.sb-row\.note[^{]*\{[^}]*(font-style|color: var\(--accent\))/.test(css)).toBe(false);
   });
 
   it("new_note_uses_selected_folder", async () => {
