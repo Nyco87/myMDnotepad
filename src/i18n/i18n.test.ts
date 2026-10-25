@@ -161,6 +161,7 @@ function literals(src: string): string[] {
 const FRENCH = /[àâçéèêëîïôûùüœÀÉÈ]|\b(le|la|les|une|des|du|et|ou|pour|avec|sans|dans|sur|est|pas|cette|ajouter|ajoutez|supprimer|annuler|fermer|ouvrir|impossible|aucune|nouvelle|nouveau|dossier|tableau|lien|liste|réessayer|enregistr\w+|texte|titre|forme|vers|jours|valeur|parts|cases|monter|descendre|renommer|choisir|modifier|nom)\b/i;
 /** Littéraux autorisés : données, pas des textes d'interface. */
 const ALLOWED = new Set<string>([
+  "Français", // nom de la langue dans sa propre langue (sélecteur de langue)
   "Insérer", // identifiant de groupe du menu « / » (le texte affiché vient de `slash.group.*`)
   "accent: abonnement impossible", // messages de console (développeur), pas d'interface
   "accent: lecture impossible",

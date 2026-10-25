@@ -84,6 +84,8 @@ pub struct SettingsLocation {
     /// Code (traduit côté interface) si le pointeur était inutilisable au démarrage : "pointer_missing" | "pointer_invalid".
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warning: Option<String>,
+    /// Dossier AppData par défaut des réglages (cible de « Déplacer vers AppData »).
+    pub default_dir: PathBuf,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -105,7 +107,7 @@ fn pointer_path(appdata: &Path) -> PathBuf {
 pub fn resolve_location(exe_dir: &Path, appdata: &Path) -> SettingsLocation {
     let exe_file = exe_dir.join(FILE_NAME);
     if exe_file.is_file() {
-        return SettingsLocation { path: exe_file, mode: LocationMode::Portable, warning: None };
+        return SettingsLocation { path: exe_file, mode: LocationMode::Portable, warning: None, default_dir: appdata.join(APPDATA_DIR) };
     }
     let default = default_path(appdata);
     let mut warning = None;
@@ -115,14 +117,14 @@ pub fn resolve_location(exe_dir: &Path, appdata: &Path) -> SettingsLocation {
                 let target = PathBuf::from(&p.settings_path);
                 if target.is_file() {
                     let mode = if target == default { LocationMode::Appdata } else { LocationMode::Custom };
-                    return SettingsLocation { path: target, mode, warning: None };
+                    return SettingsLocation { path: target, mode, warning: None, default_dir: appdata.join(APPDATA_DIR) };
                 }
                 warning = Some("pointer_missing".to_string());
             }
             Err(_) => warning = Some("pointer_invalid".to_string()),
         }
     }
-    SettingsLocation { path: default, mode: LocationMode::Appdata, warning }
+    SettingsLocation { path: default, mode: LocationMode::Appdata, warning, default_dir: appdata.join(APPDATA_DIR) }
 }
 
 /// Premier lancement sous le nouveau nom : si `path` n'existe pas mais qu'un ancien fichier de réglages existe
@@ -201,6 +203,9 @@ pub fn move_settings_to(
     exe_dir: &Path,
     appdata: &Path,
 ) -> Result<SettingsLocation, String> {
+    if dest_dir == appdata.join(APPDATA_DIR) {
+        let _ = std::fs::create_dir_all(dest_dir); // le dossier par défaut peut ne pas exister encore
+    }
     if !dest_dir.is_dir() {
         return Err("SETTINGS_DEST_INVALID".into());
     }
@@ -240,7 +245,7 @@ pub fn move_settings_to(
             return Err(e);
         }
     }
-    Ok(SettingsLocation { path: dest, mode, warning: None })
+    Ok(SettingsLocation { path: dest, mode, warning: None, default_dir: appdata.join(APPDATA_DIR) })
 }
 
 fn exe_and_appdata() -> (PathBuf, PathBuf) {
@@ -408,7 +413,7 @@ mod tests {
         save(&p, &s).unwrap();
         assert_eq!(load(&p), s);
     }
-    fn loc(p: PathBuf, mode: LocationMode) -> SettingsLocation { SettingsLocation { path: p, mode, warning: None } }
+    fn loc(p: PathBuf, mode: LocationMode) -> SettingsLocation { SettingsLocation { path: p, mode, warning: None, default_dir: PathBuf::new() } }
     fn pointer(a: &Path, target: &Path) {
         std::fs::create_dir_all(a.join("myMDnotepad")).unwrap();
         write_pointer(a, target).unwrap();
@@ -480,8 +485,7 @@ mod tests {
         let old = e.path().join("mymdnotepad.settings.json");
         save(&old, &sample()).unwrap();
         let cur = loc(old.clone(), LocationMode::Portable);
-        let dest_dir = a.path().join("myMDnotepad");
-        std::fs::create_dir_all(&dest_dir).unwrap();
+        let dest_dir = a.path().join("myMDnotepad"); // n'existe pas encore : créé par le déplacement
         let n = move_settings_to(&cur, &sample(), &dest_dir, e.path(), a.path()).unwrap();
         assert_eq!(n.mode, LocationMode::Appdata);
         assert!(!old.exists());

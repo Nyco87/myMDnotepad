@@ -113,3 +113,38 @@ export function getAccentColor(): Promise<string> {
 export function onAccentChanged(cb: (hex: string) => void): Promise<() => void> {
   return listen<string>("accent-changed", (e) => cb(e.payload));
 }
+
+export type LocationMode = "portable" | "appdata" | "custom";
+export type SettingsLocation = {
+  path: string;
+  mode: LocationMode;
+  /** Code si le pointeur de réglages était inutilisable au démarrage (retour sur AppData). */
+  warning?: "pointer_missing" | "pointer_invalid";
+  /** Dossier AppData par défaut (cible de « Déplacer vers AppData »). */
+  default_dir: string;
+};
+
+/** Emplacement du fichier de réglages et son mode (portable / AppData / personnalisé). */
+export function getSettingsLocation(): Promise<SettingsLocation> {
+  return invoke<SettingsLocation>("get_settings_location");
+}
+/** Écrit les réglages dans `destDir` puis bascule dessus ; l'ancien fichier n'est jamais supprimé. */
+export function moveSettings(destDir: string): Promise<SettingsLocation> {
+  return invoke<SettingsLocation>("move_settings", { destDir });
+}
+/** Valide un fichier de réglages sans rien changer (rejette SETTINGS_UNREADABLE / SETTINGS_INVALID). */
+export function checkSettingsFile(path: string): Promise<void> {
+  return invoke<void>("check_settings_file", { path });
+}
+/** Adopte un fichier de réglages à l'emplacement courant (remplace les réglages actuels). */
+export function loadSettingsFile(path: string): Promise<Settings> {
+  return invoke<Settings>("load_settings_file", { path });
+}
+/** Règle l'opacité du voile acrylique ; `persist` l'enregistre dans les réglages. */
+export function setTransparency(value: number, persist: boolean): Promise<void> {
+  return invoke<void>("set_transparency", { value, persist });
+}
+/** Ouvre un dossier dans l'Explorateur (un fichier y est affiché sélectionné). */
+export function openInExplorer(path: string): Promise<void> {
+  return invoke<void>("open_in_explorer", { path });
+}

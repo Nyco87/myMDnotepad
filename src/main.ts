@@ -1,13 +1,21 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { open as pickPath } from "@tauri-apps/plugin-dialog";
 import {
+  checkSettingsFile,
   createNote,
   getSettings,
+  getSettingsLocation,
+  loadSettingsFile,
+  moveSettings,
   onFsChanged,
   openExternal,
+  openInExplorer,
   readNote,
   markReady,
   rootStatus,
   saveSettings,
+  setTransparency,
   writeNote,
   type RootStatus,
   type Settings,
@@ -18,13 +26,15 @@ import { createEditor } from "./editor/editor";
 import { holdDiagramRendering, releaseDiagramRendering } from "./editor/mermaid-view";
 import { cursorAnchor } from "./editor/slash";
 import { buildSlashCommands } from "./editor/slash-commands";
-import { detectLanguage, errorText, isLang, setLanguage, t, tr } from "./i18n";
+import { detectLanguage, errorText, isLang, onLanguageChanged, setLanguage, t, tr } from "./i18n";
 import { initAccent } from "./ui/accent";
-import { showContextMenu } from "./ui/context-menu";
+import { applyTransparencyCss, DEFAULT_TRANSPARENCY } from "./ui/appearance";
+import { confirmDialog } from "./ui/confirm-dialog";
 import { showFirstRun } from "./ui/first-run";
 import { mountSidebar, type SidebarHandle } from "./ui/sidebar";
 import { createTabs, NOT_FOUND, noteTitle, type TabsController } from "./ui/tabs";
-import { mountTitlebar } from "./ui/titlebar";
+import { mountSettingsTab, type SettingsTabHandle } from "./ui/settings-tab";
+import { mountTitlebar, SETTINGS_TAB, type TabView } from "./ui/titlebar";
 import { mountToast } from "./ui/toast";
 import { mountToolbar, type ToolbarHandle } from "./ui/toolbar";
 
@@ -41,6 +51,8 @@ interface Layout {
   sidebar: HTMLElement;
   editorHost: HTMLElement;
   emptyState: HTMLElement;
+  /** Conteneur de l'onglet Réglages (caché tant que cet onglet n'est pas affiché). */
+  settingsHost: HTMLElement;
 }
 
 /** Barre de titre → bandeau → (arborescence | éditeur), selon la maquette dark-fluent-v2. */
@@ -58,10 +70,13 @@ function buildLayout(app: HTMLElement): Layout {
   editorHost.className = "editor-host";
   const emptyState = document.createElement("div");
   emptyState.className = "empty-state";
-  editorHost.appendChild(emptyState);
+  const settingsHost = document.createElement("div");
+  settingsHost.className = "settings-host";
+  settingsHost.hidden = true;
+  editorHost.append(emptyState, settingsHost);
   body.append(sidebar, editorHost);
   app.append(titlebar, toolbar, body);
-  return { titlebar, toolbar, sidebar, editorHost, emptyState };
+  return { titlebar, toolbar, sidebar, editorHost, emptyState, settingsHost };
 }
 
 async function main(): Promise<void> {
@@ -77,6 +92,10 @@ async function main(): Promise<void> {
   let sidebar: SidebarHandle | null = null;
   let restoring = true;
   let lastActive: string | null = null;
+  // Onglet Réglages : un seul à la fois, jamais enregistré ni restauré (ce n'est pas une note).
+  let view: "notes" | "settings" = "notes";
+  let settingsTab: SettingsTabHandle | null = null;
+  let holdSettings = false; // fermeture d'une note pendant que Réglages est affiché : on y reste
 
   const isRenaming = (): boolean => document.activeElement?.classList.contains("sb-rename") ?? false;
   /** Donne le focus à l'éditeur actif, sauf si l'utilisateur est en train de nommer une note dans l'arborescence. */
@@ -112,19 +131,48 @@ async function main(): Promise<void> {
     return true;
   };
 
+  const renderTitlebar = (): void => {
+    const active = tabs?.active() ?? null;
+    const list: TabView[] = (tabs?.list() ?? []).map((rel) => ({
+      rel,
+      title: noteTitle(rel),
+      active: view === "notes" && rel === active,
+      missing: tabs!.isMissing(rel),
+    }));
+    if (settingsTab) list.push({ rel: SETTINGS_TAB, title: t("titlebar.settings"), active: view === "settings", missing: false });
+    titlebar.render(list);
+  };
+
+  /** Affiche les notes ou l'onglet Réglages (l'éditeur actif reste monté, seulement caché). */
+  const setView = (next: "notes" | "settings"): void => {
+    view = next;
+    app.classList.toggle("settings-view", next === "settings");
+    ui.settingsHost.hidden = next !== "settings";
+    renderTitlebar();
+    toolbar?.refresh();
+  };
+
   const titlebar = mountTitlebar(ui.titlebar, {
     onActivate: (rel) => {
+      if (rel === SETTINGS_TAB) return setView("settings");
+      setView("notes");
       tabs?.activate(rel);
       focusEditor();
     },
     onClose: (rel) => {
-      if (!workshopBlocksClose()) void tabs?.close(rel).then(focusEditor);
+      if (rel === SETTINGS_TAB) return closeSettings();
+      if (workshopBlocksClose()) return;
+      holdSettings = view === "settings";
+      void tabs?.close(rel).then(() => {
+        holdSettings = false;
+        if (view === "notes") focusEditor();
+      });
     },
     onNew: () => void sidebar?.newNote(),
-    onMenu: (r) => openMenu(r),
+    onSettings: () => void openSettings(),
   });
 
-  // ---- Menu « ⋯ » ----
+  // ---- Changement de dossier (bouton « Changer… » de l'onglet Réglages) ----
   const changeRoot = async (): Promise<void> => {
     try {
       await tabs?.flushAll();
@@ -144,18 +192,88 @@ async function main(): Promise<void> {
     }
     location.reload(); // ferme les onglets et repart sur l'écran de premier lancement
   };
-  function openMenu(anchor: DOMRect): void {
-    showContextMenu(anchor.left, anchor.bottom + 2, [
-      { label: t("main.changeRootMenu"), action: () => void changeRoot() },
-    ]);
+
+  // ---- Onglet Réglages ----
+  let previewTimer: ReturnType<typeof setTimeout> | null = null;
+  let previewAt = 0;
+  /** Aperçu en direct : le voile CSS suit tout de suite, l'acrylique natif au plus toutes les 50 ms. */
+  const setTransparencyLive = (value: number, persist: boolean): Promise<void> => {
+    applyTransparencyCss(value);
+    if (previewTimer) clearTimeout(previewTimer);
+    previewTimer = null;
+    if (persist) return setTransparency(value, true);
+    const wait = previewAt + 50 - Date.now();
+    const send = (): void => {
+      previewAt = Date.now();
+      void setTransparency(value, false).catch((e) => console.error(e));
+    };
+    if (wait <= 0) send();
+    else previewTimer = setTimeout(send, wait);
+    return Promise.resolve();
+  };
+  const openSettings = async (): Promise<void> => {
+    if (!tabs) return; // pas encore d'espace de travail (écran de premier lancement)
+    if (!settingsTab) {
+      settingsTab = mountSettingsTab(ui.settingsHost, {
+        getRoot: async () => (await getSettings()).root_dir,
+        getLocation: getSettingsLocation,
+        getTransparency: async () => (await getSettings()).transparency ?? DEFAULT_TRANSPARENCY,
+        changeRoot,
+        openInExplorer,
+        pickFolder: async (title) => {
+          const p = await pickPath({ directory: true, title });
+          return typeof p === "string" ? p : null;
+        },
+        pickSettingsFile: async () => {
+          const p = await pickPath({ multiple: false, filters: [{ name: "JSON", extensions: ["json"] }] });
+          return typeof p === "string" ? p : null;
+        },
+        moveSettings,
+        checkSettingsFile,
+        loadSettingsFile: async (path) => {
+          await tabs?.flushAll(); // rien ne doit se perdre : on enregistre avant de remplacer les réglages
+          restoring = true; // la session en cours n'écrase pas les réglages chargés
+          try {
+            await loadSettingsFile(path);
+          } catch (e) {
+            restoring = false;
+            throw e;
+          }
+          location.reload();
+        },
+        confirm: (message, okLabel) => confirmDialog(message, okLabel),
+        setTransparency: setTransparencyLive,
+        setLanguage: async (lang) => {
+          setLanguage(lang);
+          const s = await getSettings(); // relire : ne jamais écraser d'autres réglages avec une copie périmée
+          await saveSettings({ ...s, language: lang });
+        },
+        openExternal,
+        version: getVersion,
+        notify: toast,
+      });
+    }
+    setView("settings");
+    await settingsTab.refresh();
+  };
+  function closeSettings(): void {
+    settingsTab?.destroy();
+    settingsTab = null;
+    setView("notes");
+    focusEditor();
   }
+  onLanguageChanged(() => renderTitlebar());
 
   const onTabsChange = (): void => {
     if (!tabs) return;
     const active = tabs.active();
-    titlebar.render(
-      tabs.list().map((rel) => ({ rel, title: noteTitle(rel), active: rel === active, missing: tabs!.isMissing(rel) })),
-    );
+    // Une autre note devient active (ouverture, Ctrl+Tab…) : on quitte l'onglet Réglages.
+    if (view === "settings" && !holdSettings && active !== null && active !== lastActive) {
+      view = "notes";
+      app.classList.remove("settings-view");
+      ui.settingsHost.hidden = true;
+    }
+    renderTitlebar();
     ui.emptyState.hidden = tabs.list().length > 0;
     toolbar?.refresh();
     if (active !== lastActive) {
@@ -215,13 +333,15 @@ async function main(): Promise<void> {
       } else if (key === "w" && !e.shiftKey) {
         e.preventDefault();
         e.stopPropagation();
+        if (view === "settings") return closeSettings();
         const active = tabs?.active();
         if (workshopBlocksClose()) return;
         if (active) void tabs!.close(active).then(focusEditor);
       } else if (e.key === "Tab") {
         e.preventDefault();
         e.stopPropagation();
-        tabs?.next(e.shiftKey ? -1 : 1);
+        if (view === "settings") setView("notes");
+        else tabs?.next(e.shiftKey ? -1 : 1);
         focusEditor();
       }
     },
@@ -249,7 +369,10 @@ async function main(): Promise<void> {
         // autre erreur : tabs.open la signalera elle-même
       }
     }
-    if (await tabs.open(rel)) focusEditor();
+    if (await tabs.open(rel)) {
+      if (view === "settings") setView("notes");
+      focusEditor();
+    }
   };
 
   /** Monte l'espace de travail (onglets, bandeau, arborescence) pour le dossier courant. */
@@ -296,7 +419,9 @@ async function main(): Promise<void> {
       beforeMutate: (rel) => (tabs ? tabs.lockUnder(rel) : Promise.resolve()),
       onOpen: (rel) =>
         void tabs?.open(rel).then((ok) => {
-          if (ok) focusEditor();
+          if (!ok) return;
+          if (view === "settings") setView("notes");
+          focusEditor();
         }),
       onRenamed: (oldRel, newRel) => tabs?.renamed(oldRel, newRel),
       onDeleted: (rel) => tabs?.deleted(rel),
@@ -328,6 +453,7 @@ async function main(): Promise<void> {
       toast(t("main.settingsUnreadable", { err: errorText(e) }));
     }
     setLanguage(isLang(settings?.language) ? settings.language : detectLanguage());
+    applyTransparencyCss(settings?.transparency ?? DEFAULT_TRANSPARENCY);
     let forceChange = false;
     try {
       forceChange = sessionStorage.getItem(CHANGE_ROOT_KEY) === "1";

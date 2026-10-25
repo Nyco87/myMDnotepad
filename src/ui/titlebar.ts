@@ -1,6 +1,9 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { tr, type Key } from "../i18n";
 
+/** `rel` de l'onglet spécial « Réglages » (ce n'est pas une note : aucun fichier). */
+export const SETTINGS_TAB = "::settings";
+
 export interface TabView {
   rel: string;
   title: string;
@@ -13,8 +16,8 @@ export interface TitlebarHandlers {
   onActivate(rel: string): void;
   onClose(rel: string): void;
   onNew(): void;
-  /** Clic sur le bouton « ⋯ » : `anchor` est son rectangle (pour placer le menu). */
-  onMenu?(anchor: DOMRect): void;
+  /** Clic sur l'icône ⚙ : ouvre (ou active) l'onglet Réglages. */
+  onSettings?(): void;
 }
 
 export interface TitlebarHandle {
@@ -46,13 +49,12 @@ export function mountTitlebar(el: HTMLElement, h: TitlebarHandlers): TitlebarHan
   drag.className = "titlebar-drag";
   drag.setAttribute("data-tauri-drag-region", "");
 
-  const menuBtn = document.createElement("button");
-  menuBtn.type = "button";
-  menuBtn.className = "titlebar-menu";
-  menuBtn.textContent = "⋯";
-  tr(menuBtn, { title: "titlebar.menu", aria: "titlebar.menu" });
-  menuBtn.setAttribute("aria-haspopup", "menu");
-  menuBtn.addEventListener("click", () => h.onMenu?.(menuBtn.getBoundingClientRect()));
+  const settingsBtn = document.createElement("button");
+  settingsBtn.type = "button";
+  settingsBtn.className = "titlebar-menu titlebar-settings";
+  settingsBtn.textContent = "⚙";
+  tr(settingsBtn, { title: "titlebar.settings", aria: "titlebar.settings" });
+  settingsBtn.addEventListener("click", () => h.onSettings?.());
 
   const ctl = document.createElement("div");
   ctl.className = "win-ctl";
@@ -71,7 +73,7 @@ export function mountTitlebar(el: HTMLElement, h: TitlebarHandlers): TitlebarHan
     winBtn("✕", "common.close", "win-close", () => getCurrentWindow().close()),
   );
 
-  el.append(strip, drag, menuBtn, ctl);
+  el.append(strip, drag, settingsBtn, ctl);
 
   const renderTab = (t: TabView): HTMLElement => {
     const tab = document.createElement("div");
@@ -80,11 +82,15 @@ export function mountTitlebar(el: HTMLElement, h: TitlebarHandlers): TitlebarHan
     tab.setAttribute("aria-selected", String(t.active));
     tab.dataset.rel = t.rel;
     if (t.missing) tr(tab, { title: "titlebar.missing" });
-    else tab.title = t.rel;
+    else if (t.rel !== SETTINGS_TAB) tab.title = t.rel;
 
     const label = document.createElement("span");
     label.className = "tab-label";
-    label.textContent = `📄 ${t.title}`;
+    if (t.rel === SETTINGS_TAB) {
+      label.append("⚙ ");
+      label.append(tr(document.createElement("span"), { text: "titlebar.settings" }));
+      tab.classList.add("tab-settings");
+    } else label.textContent = `📄 ${t.title}`;
 
     const close = document.createElement("button");
     close.type = "button";
