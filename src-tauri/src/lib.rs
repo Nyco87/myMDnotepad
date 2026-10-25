@@ -17,14 +17,14 @@ use tauri::Manager;
 static START: OnceLock<Instant> = OnceLock::new();
 
 /// Appelée par le frontend quand l'onglet actif (ou l'écran de premier lancement) est affiché :
-/// écrit `startup_ms=<n>` sur stdout et dans `%TEMP%\mdnote-startup.log`.
+/// écrit `startup_ms=<n>` sur stdout et dans `%TEMP%\mymdnotepad-startup.log`.
 #[tauri::command]
 fn mark_ready() {
     use std::io::Write;
     let ms = START.get().map(|s| s.elapsed().as_millis()).unwrap_or(0);
     println!("startup_ms={ms}");
     let _ = std::io::stdout().flush();
-    let log = std::env::temp_dir().join("mdnote-startup.log");
+    let log = std::env::temp_dir().join("mymdnotepad-startup.log");
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(log) {
         let _ = writeln!(f, "startup_ms={ms}");
     }
@@ -63,6 +63,7 @@ pub fn run() {
                 .map(PathBuf::from)
                 .unwrap_or_else(|| exe_dir.clone());
             let settings_path = settings::settings_path(&exe_dir, &appdata);
+            settings::migrate_legacy(&settings_path, &exe_dir, &appdata);
             let loaded = settings::load(&settings_path);
             if let Some(r) = loaded.root_dir.as_deref().filter(|r| std::path::Path::new(r).is_dir()) {
                 let _ = app.asset_protocol_scope().allow_directory(r, true);

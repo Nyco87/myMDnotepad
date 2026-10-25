@@ -3,7 +3,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{Manager, State};
 
-const FILE_NAME: &str = "mdnote.settings.json";
+const FILE_NAME: &str = "mymdnotepad.settings.json";
+const APPDATA_DIR: &str = "myMDnotepad";
+/// Anciens noms (avant le renommage en myMDnotepad) : lus une fois pour migration, jamais supprimés.
+const LEGACY_FILE_NAME: &str = "mdnote.settings.json";
+const LEGACY_APPDATA_DIR: &str = "MDnote";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
@@ -53,15 +57,32 @@ impl AppState {
     }
 }
 
-/// `exe_dir/mdnote.settings.json` si le dossier est inscriptible, sinon `appdata/MDnote/…`.
+/// `exe_dir/mymdnotepad.settings.json` si le dossier est inscriptible, sinon `appdata/myMDnotepad/…`.
 pub fn settings_path(exe_dir: &Path, appdata: &Path) -> PathBuf {
-    let probe = exe_dir.join(".mdnote-write-test");
+    let probe = exe_dir.join(".mymdnotepad-write-test");
     let writable = std::fs::write(&probe, b"").is_ok();
     if writable {
         let _ = std::fs::remove_file(&probe);
         exe_dir.join(FILE_NAME)
     } else {
-        appdata.join("MDnote").join(FILE_NAME)
+        appdata.join(APPDATA_DIR).join(FILE_NAME)
+    }
+}
+
+/// Premier lancement sous le nouveau nom : si `path` n'existe pas mais qu'un ancien fichier de réglages existe
+/// (à côté de l'exe, sinon dans `appdata/MDnote`), il est relu et enregistré sous le nouveau nom. L'ancien fichier
+/// n'est jamais modifié ni supprimé. Renvoie vrai si une migration a eu lieu.
+pub fn migrate_legacy(path: &Path, exe_dir: &Path, appdata: &Path) -> bool {
+    if path.exists() {
+        return false;
+    }
+    let candidates = [
+        exe_dir.join(LEGACY_FILE_NAME),
+        appdata.join(LEGACY_APPDATA_DIR).join(LEGACY_FILE_NAME),
+    ];
+    match candidates.iter().find(|p| p.is_file()) {
+        Some(old) => save(path, &load(old)).is_ok(),
+        None => false,
     }
 }
 
@@ -165,11 +186,49 @@ mod tests {
     }
     #[test] fn settings_path_uses_exe_dir_when_writable() {
         let e = tempdir().unwrap(); let a = tempdir().unwrap();
-        assert_eq!(settings_path(e.path(), a.path()), e.path().join("mdnote.settings.json"));
+        assert_eq!(settings_path(e.path(), a.path()), e.path().join("mymdnotepad.settings.json"));
     }
     #[test] fn settings_path_falls_back_when_exe_dir_readonly() {
         let a = tempdir().unwrap();
         let p = settings_path(&a.path().join("missing_dir"), a.path());
-        assert_eq!(p, a.path().join("MDnote").join("mdnote.settings.json"));
+        assert_eq!(p, a.path().join("myMDnotepad").join("mymdnotepad.settings.json"));
+    }
+    fn old(dir: &Path, root: &str) -> PathBuf {
+        std::fs::create_dir_all(dir).unwrap();
+        let p = dir.join("mdnote.settings.json");
+        std::fs::write(&p, format!(r#"{{"root_dir":"{root}","open_tabs":["a.md"]}}"#)).unwrap();
+        p
+    }
+    #[test] fn migrates_exe_dir_file_and_keeps_the_old_one() {
+        let e = tempdir().unwrap(); let a = tempdir().unwrap();
+        let o = old(e.path(), "C:/n");
+        let new = e.path().join("mymdnotepad.settings.json");
+        assert!(migrate_legacy(&new, e.path(), a.path()));
+        let s = load(&new);
+        assert_eq!(s.root_dir.as_deref(), Some("C:/n"));
+        assert_eq!(s.open_tabs, vec!["a.md".to_string()]);
+        assert!(o.exists());
+    }
+    #[test] fn migrates_appdata_file() {
+        let e = tempdir().unwrap(); let a = tempdir().unwrap();
+        let o = old(&a.path().join("MDnote"), "C:/m");
+        let new = a.path().join("myMDnotepad").join("mymdnotepad.settings.json");
+        assert!(migrate_legacy(&new, e.path(), a.path()));
+        assert_eq!(load(&new).root_dir.as_deref(), Some("C:/m"));
+        assert!(o.exists());
+    }
+    #[test] fn never_overwrites_an_existing_new_file() {
+        let e = tempdir().unwrap(); let a = tempdir().unwrap();
+        old(e.path(), "C:/old");
+        let new = e.path().join("mymdnotepad.settings.json");
+        save(&new, &Settings { root_dir: Some("C:/new".into()), ..Settings::default() }).unwrap();
+        assert!(!migrate_legacy(&new, e.path(), a.path()));
+        assert_eq!(load(&new).root_dir.as_deref(), Some("C:/new"));
+    }
+    #[test] fn no_legacy_file_means_no_migration() {
+        let e = tempdir().unwrap(); let a = tempdir().unwrap();
+        let new = e.path().join("mymdnotepad.settings.json");
+        assert!(!migrate_legacy(&new, e.path(), a.path()));
+        assert!(!new.exists());
     }
 }

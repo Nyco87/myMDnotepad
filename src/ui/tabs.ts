@@ -328,7 +328,7 @@ export function createTabs(o: TabsOptions): TabsController {
       }
       await o.io.writeNote(c.copy, c.content);
       tab.conflicts.shift();
-      notify(`Note modifiée hors de MDnote : l'autre version est enregistrée dans « ${noteTitle(c.copy)} ».`, { sticky: true });
+      notify(`Note modifiée hors de myMDnotepad : l'autre version est enregistrée dans « ${noteTitle(c.copy)} ».`, { sticky: true });
     }
   };
 
@@ -351,7 +351,7 @@ export function createTabs(o: TabsOptions): TabsController {
     tab.banner.hidden = reason === null;
     if (reason !== null) {
       const text = document.createElement("span");
-      text.textContent = `Cette note ne peut pas être relue : ${reason} MDnote n'y écrit plus tant qu'elle reste illisible.`;
+      text.textContent = `Cette note ne peut pas être relue : ${reason} myMDnotepad n'y écrit plus tant qu'elle reste illisible.`;
       const retry = document.createElement("button");
       retry.type = "button";
       retry.textContent = "Réessayer";

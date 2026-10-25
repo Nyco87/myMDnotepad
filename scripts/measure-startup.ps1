@@ -1,22 +1,22 @@
 ﻿<#
- Mesure le temps de démarrage de MDnote (clic -> onglet actif affiché).
+ Mesure le temps de démarrage de myMDnotepad (clic -> onglet actif affiché).
  Lance l'exe N fois avec une note de 2 000 lignes + un tableau de 50 lignes + 5 schémas mermaid
  + 5 alertes + du texte surligné ouverts,
- lit startup_ms dans %TEMP%\mdnote-startup.log et affiche la médiane.
+ lit startup_ms dans %TEMP%\mymdnotepad-startup.log et affiche la médiane.
  Usage : powershell -File scripts\measure-startup.ps1 [-Exe path] [-Runs 5]
 #>
 param(
-  [string]$Exe = (Join-Path $PSScriptRoot "..\src-tauri\target\release\mdnote.exe"),
+  [string]$Exe = (Join-Path $PSScriptRoot "..\src-tauri\target\release\mymdnotepad.exe"),
   [int]$Runs = 5,
   [int]$TimeoutSec = 30
 )
 $ErrorActionPreference = "Stop"
 $Exe = (Resolve-Path $Exe).Path
-$work = Join-Path $env:TEMP ("mdnote-measure-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
+$work = Join-Path $env:TEMP ("mymdnotepad-measure-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
 $notes = Join-Path $work "notes"
 $bin = Join-Path $work "bin"
 New-Item -ItemType Directory -Force $notes, $bin | Out-Null
-Copy-Item $Exe (Join-Path $bin "mdnote.exe")
+Copy-Item $Exe (Join-Path $bin "mymdnotepad.exe")
 
 # Note de test : 2 000 lignes de texte varié + tableau de 50 lignes.
 $sb = New-Object System.Text.StringBuilder
@@ -68,14 +68,14 @@ $settings = @{
   active_tab = "grosse-note.md"
   recent_emojis = @()
 } | ConvertTo-Json
-$settingsPath = Join-Path $bin "mdnote.settings.json"
-$log = Join-Path $env:TEMP "mdnote-startup.log"
+$settingsPath = Join-Path $bin "mymdnotepad.settings.json"
+$log = Join-Path $env:TEMP "mymdnotepad-startup.log"
 
 $results = @()
 for ($run = 1; $run -le $Runs; $run++) {
   [System.IO.File]::WriteAllText($settingsPath, $settings, (New-Object System.Text.UTF8Encoding($false)))
   if (Test-Path $log) { Remove-Item $log -Force }
-  $p = Start-Process -FilePath (Join-Path $bin "mdnote.exe") -PassThru
+  $p = Start-Process -FilePath (Join-Path $bin "mymdnotepad.exe") -PassThru
   $deadline = (Get-Date).AddSeconds($TimeoutSec)
   $ms = $null
   while ((Get-Date) -lt $deadline) {

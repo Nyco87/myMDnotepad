@@ -25,13 +25,13 @@ describe("toast", () => {
 
   it("sticky message stays until clicked and does not hold back the queue", () => {
     const toast = mountToast(document.body);
-    toast("Note modifiée hors de MDnote : copie de conflit", { sticky: true });
+    toast("Note modifiée hors de myMDnotepad : copie de conflit", { sticky: true });
     toast("autre");
     expect(shown()).toBe("autre");
     vi.advanceTimersByTime(60_000);
     expect(shown()).toBeNull();
     const sticky = document.querySelector(".toast-sticky") as HTMLElement;
-    expect(sticky.textContent).toBe("Note modifiée hors de MDnote : copie de conflit");
+    expect(sticky.textContent).toBe("Note modifiée hors de myMDnotepad : copie de conflit");
     sticky.click();
     expect(document.querySelector(".toast-sticky")).toBeNull();
   });
