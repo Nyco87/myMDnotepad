@@ -9,6 +9,7 @@ afterEach(() => {
 
 function setup(opts: { width?: number | null; collapsed?: boolean } = {}) {
   const host = document.createElement("div");
+  host.innerHTML = '<button class="sb-new"></button><div class="sb-tree"></div>';
   document.body.appendChild(host);
   const onChange = vi.fn();
   const newNote = vi.fn();
@@ -99,5 +100,13 @@ describe("sidebar panel", () => {
     const css = themeCss();
     expect(css).toMatch(/\.sidebar-host \{[^}]*transition: width 120ms/);
     expect(css).toMatch(/prefers-reduced-motion: reduce\) \{[^}]*\.sidebar-host \{ transition: none/);
+  });
+
+  it("puts_the_collapse_chevron_on_the_same_row_as_the_new_note_button", () => {
+    const { q, host } = setup();
+    const row = q(".sb-head");
+    expect(row.contains(q(".sb-new"))).toBe(true);
+    expect(row.contains(q(".sb-toggle"))).toBe(true);
+    expect(host.querySelectorAll(".sb-head").length).toBe(1);
   });
 });

@@ -62,6 +62,9 @@ export function mountSidebarPanel(host: HTMLElement, opts: SidebarPanelOptions):
   mini.className = "sb-mini-new";
   mini.appendChild(icon(["M8 3v10M3 8h10"]));
   tr(mini, { title: "sidebar.newNoteIcon", aria: "sidebar.newNoteIcon" });
+  // Le bouton « Nouvelle note » partage la rangée du chevron (réduit : masqué par le CSS).
+  const newBtn = host.querySelector(":scope > .sb-new");
+  if (newBtn) head.append(newBtn);
   head.append(toggle, mini);
 
   const grip = document.createElement("div");

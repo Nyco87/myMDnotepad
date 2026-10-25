@@ -25,7 +25,7 @@ export interface TitlebarHandle {
 }
 
 /**
- * Barre de titre façon Terminal Windows : onglets, bouton ＋ (nouvelle note), zone vide déplaçable
+ * Barre de titre façon Terminal Windows : onglets (défilables, flèches ‹ › en cas de dépassement), bouton ＋ (nouvelle note), zone vide déplaçable
  * (`data-tauri-drag-region`) et boutons de fenêtre ─ ☐ ✕.
  */
 export function mountTitlebar(el: HTMLElement, h: TitlebarHandlers): TitlebarHandle {
@@ -37,6 +37,52 @@ export function mountTitlebar(el: HTMLElement, h: TitlebarHandlers): TitlebarHan
   strip.className = "tabstrip";
   strip.setAttribute("role", "tablist");
   strip.setAttribute("data-tauri-drag-region", "");
+
+  const wrap = document.createElement("div");
+  wrap.className = "tabstrip-wrap";
+  const arrow = (cls: string, glyph: string, title: Key): HTMLButtonElement => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `tab-scroll ${cls}`;
+    b.textContent = glyph;
+    b.hidden = true;
+    tr(b, { title, aria: title });
+    return b;
+  };
+  const prevBtn = arrow("tab-scroll-prev", "‹", "titlebar.tabsPrev");
+  const nextBtn = arrow("tab-scroll-next", "›", "titlebar.tabsNext");
+  wrap.append(prevBtn, strip, nextBtn);
+
+  const behavior = (): ScrollBehavior =>
+    typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+  const updateArrows = (): void => {
+    const overflow = strip.scrollWidth > strip.clientWidth + 1;
+    prevBtn.hidden = nextBtn.hidden = !overflow;
+    prevBtn.disabled = !overflow || strip.scrollLeft <= 0;
+    nextBtn.disabled = !overflow || strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 1;
+  };
+  const scrollByTab = (dir: 1 | -1): void => {
+    const w = strip.querySelector<HTMLElement>(".tab")?.offsetWidth || 160;
+    if (typeof strip.scrollBy === "function") strip.scrollBy({ left: dir * w, behavior: behavior() });
+    else strip.scrollLeft += dir * w;
+  };
+  prevBtn.addEventListener("click", () => scrollByTab(-1));
+  nextBtn.addEventListener("click", () => scrollByTab(1));
+  strip.addEventListener("scroll", updateArrows);
+  strip.addEventListener(
+    "wheel",
+    (e) => {
+      if (strip.scrollWidth <= strip.clientWidth || e.deltaY === 0 || e.ctrlKey) return;
+      e.preventDefault();
+      strip.scrollLeft += e.deltaY;
+    },
+    { passive: false },
+  );
+  if (typeof ResizeObserver === "function") {
+    const ro = new ResizeObserver(updateArrows);
+    ro.observe(strip);
+    ro.observe(el);
+  }
 
   const newBtn = document.createElement("button");
   newBtn.type = "button";
@@ -73,7 +119,7 @@ export function mountTitlebar(el: HTMLElement, h: TitlebarHandlers): TitlebarHan
     winBtn("✕", "common.close", "win-close", () => getCurrentWindow().close()),
   );
 
-  el.append(strip, drag, settingsBtn, ctl);
+  el.append(wrap, newBtn, drag, settingsBtn, ctl);
 
   const renderTab = (t: TabView): HTMLElement => {
     const tab = document.createElement("div");
@@ -115,10 +161,13 @@ export function mountTitlebar(el: HTMLElement, h: TitlebarHandlers): TitlebarHan
 
   return {
     render(tabs) {
+      const left = strip.scrollLeft;
       strip.textContent = "";
       for (const t of tabs) strip.appendChild(renderTab(t));
-      strip.appendChild(newBtn);
-      strip.querySelector(".tab.active")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+      strip.scrollLeft = left;
+      updateArrows();
+      strip.querySelector(".tab.active")?.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: behavior() });
+      updateArrows();
     },
   };
 }

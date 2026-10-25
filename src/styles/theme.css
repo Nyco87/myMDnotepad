@@ -413,6 +413,7 @@ body {
 .sidebar-host.resizing { transition: none; user-select: none; }
 @media (prefers-reduced-motion: reduce) { .sidebar-host { transition: none; } }
 .sb-head { display: flex; justify-content: flex-end; align-items: center; gap: 4px; margin-bottom: 6px; }
+.sb-head .sb-new { flex: 1; width: auto; min-width: 0; height: 34px; padding-top: 0; padding-bottom: 0; }
 .sb-toggle, .sb-mini-new {
   display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
   border: 0; border-radius: 4px; background: transparent; color: var(--text); cursor: pointer;
@@ -442,9 +443,18 @@ body {
 
 /* ---- Title bar & tabs (Windows Terminal style) ---- */
 .titlebar { display: flex; align-items: stretch; height: 36px; flex: none; padding-left: 8px; user-select: none; }
-.tabstrip { display: flex; align-items: flex-end; gap: 2px; min-width: 0; overflow: hidden; }
+.tabstrip-wrap { display: flex; align-items: flex-end; flex: 0 1 auto; min-width: 0; }
+.tabstrip { display: flex; align-items: flex-end; gap: 2px; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.tabstrip::-webkit-scrollbar { display: none; }
+.tab-scroll {
+  flex: none; align-self: center; width: 22px; height: 28px; margin: 0 2px; padding: 0; border: 0; border-radius: 4px;
+  background: transparent; color: #ccc; font: inherit; font-size: 16px; line-height: 1; cursor: pointer;
+}
+.tab-scroll:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+.tab-scroll:disabled { opacity: 0.3; cursor: default; }
+.tab-scroll[hidden] { display: none; }
 .tab {
-  display: flex; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 72px; max-width: 220px;
+  display: flex; align-items: center; gap: 8px; flex: 0 0 auto; min-width: 140px; max-width: 220px; box-sizing: border-box;
   padding: 6px 6px 6px 14px; border-radius: 6px 6px 0 0; color: #bbb; cursor: default;
 }
 .tab:hover { background: rgba(255, 255, 255, 0.05); }

@@ -19,6 +19,8 @@ export const fr = {
   "emoji.marks": "Repères",
   "toolbar.table": "Tableau",
   "titlebar.newNote": "Nouvelle note (Ctrl+N)",
+  "titlebar.tabsPrev": "Onglets précédents",
+  "titlebar.tabsNext": "Onglets suivants",
   "titlebar.minimize": "Réduire",
   "titlebar.maximize": "Agrandir",
   "titlebar.missing": "Fichier introuvable sur le disque",

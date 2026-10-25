@@ -21,6 +21,8 @@ export const en: Record<keyof typeof fr, string> = {
   "emoji.marks": "Markers",
   "toolbar.table": "Table",
   "titlebar.newNote": "New note (Ctrl+N)",
+  "titlebar.tabsPrev": "Previous tabs",
+  "titlebar.tabsNext": "Next tabs",
   "titlebar.minimize": "Minimize",
   "titlebar.maximize": "Maximize",
   "titlebar.missing": "File not found on disk",
