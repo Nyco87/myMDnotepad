@@ -13,7 +13,7 @@ vi.mock("../diagram/render", () => ({
 }));
 
 import { createEditor } from "./editor";
-import { clearDiagramCache } from "./mermaid-view";
+import { clearDiagramCache, holdDiagramRendering, releaseDiagramRendering } from "./mermaid-view";
 
 const flush = async (): Promise<void> => {
   for (let i = 0; i < 6; i++) await new Promise((res) => setTimeout(res, 5));
@@ -92,6 +92,18 @@ describe("mermaid node view", () => {
     expect(r.render).toHaveBeenCalledTimes(3);
     expect(r.maxRunning).toBe(1);
     expect(mount.querySelectorAll(".diagram svg").length).toBe(3);
+  });
+
+  it("draws nothing while the start-up gate is held, then draws once released", async () => {
+    holdDiagramRendering();
+    const { mount } = make(PIE);
+    await flush();
+    expect(r.render).not.toHaveBeenCalled();
+    expect(mount.querySelector(".diagram svg")).toBeNull();
+    releaseDiagramRendering();
+    await flush();
+    expect(r.render).toHaveBeenCalledTimes(1);
+    expect(mount.querySelector(".diagram svg")).not.toBeNull();
   });
 
   it("keeps ordinary code blocks as code", async () => {

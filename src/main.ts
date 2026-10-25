@@ -14,6 +14,7 @@ import {
 import type { EditorView } from "prosemirror-view";
 import { editDiagramAt } from "./diagram/insert";
 import { createEditor } from "./editor/editor";
+import { holdDiagramRendering, releaseDiagramRendering } from "./editor/mermaid-view";
 import { cursorAnchor } from "./editor/slash";
 import { buildSlashCommands } from "./editor/slash-commands";
 import { initAccent } from "./ui/accent";
@@ -62,6 +63,7 @@ function buildLayout(app: HTMLElement): Layout {
 }
 
 async function main(): Promise<void> {
+  holdDiagramRendering(); // mermaid ne se charge qu'une fois la fenêtre prête (voir `ready`)
   const app = document.getElementById("app") as HTMLElement;
   const ui = buildLayout(app);
   const toast = mountToast(document.body);
@@ -219,6 +221,7 @@ async function main(): Promise<void> {
     if (readyCalled) return;
     readyCalled = true;
     void markReady().catch((e) => console.error(e));
+    releaseDiagramRendering();
   };
 
   /** Monte l'espace de travail (onglets, bandeau, arborescence) pour le dossier courant. */

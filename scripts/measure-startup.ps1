@@ -1,6 +1,7 @@
 ﻿<#
  Mesure le temps de démarrage de MDnote (clic -> onglet actif affiché).
- Lance l'exe N fois avec une note de 2 000 lignes + un tableau de 50 lignes ouverts,
+ Lance l'exe N fois avec une note de 2 000 lignes + un tableau de 50 lignes + 5 schémas mermaid
+ + 5 alertes + du texte surligné ouverts,
  lit startup_ms dans %TEMP%\mdnote-startup.log et affiche la médiane.
  Usage : powershell -File scripts\measure-startup.ps1 [-Exe path] [-Runs 5]
 #>
@@ -34,16 +35,38 @@ for ($i = 1; $i -le 1900; $i++) {
 [void]$sb.AppendLine("| Colonne A | Colonne B | Colonne C |")
 [void]$sb.AppendLine("| --- | --- | --- |")
 for ($r = 1; $r -le 50; $r++) { [void]$sb.AppendLine("| a$r | b$r | c$r |") }
+
+# v2 : 5 schémas mermaid (un par type de l'atelier + un diagramme de séquence), 5 alertes, du texte surligné.
+$fence = '`' * 3
+$diagrams = @(
+  "pie title Temps passé`n    `"Dév`" : 60`n    `"Réunions`" : 25`n    `"Mails`" : 15",
+  "flowchart TD`n    n1[`"Idée`"]`n    n2{`"Validée ?`"}`n    n3(`"Abandon`")`n    n1 --> n2`n    n2 -->|`"non`"| n3",
+  "stateDiagram-v2`n    state `"Idle`" as s1`n    state `"Done`" as s2`n    [*] --> s1`n    s1 --> s2 : go`n    s2 --> [*]",
+  "gantt`n    title Projet`n    dateFormat YYYY-MM-DD`n    section Conception`n    Maquettes :t1, 2026-10-26, 3d`n    Specs :t2, after t1, 2d",
+  "sequenceDiagram`n    Alice->>Bob: Bonjour`n    Bob-->>Alice: Salut"
+)
+foreach ($d in $diagrams) {
+  [void]$sb.AppendLine()
+  [void]$sb.AppendLine($fence + "mermaid")
+  [void]$sb.AppendLine($d)
+  [void]$sb.AppendLine($fence)
+}
+foreach ($kind in @("NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION")) {
+  [void]$sb.AppendLine()
+  [void]$sb.AppendLine("> [!$kind]")
+  [void]$sb.AppendLine("> Une alerte $kind avec du **gras** et du ==texte surligné==.")
+}
+[void]$sb.AppendLine()
+[void]$sb.AppendLine("Un paragraphe avec ==du texte surligné== et ==un autre passage== à la fin.")
 [System.IO.File]::WriteAllText((Join-Path $notes "grosse-note.md"), $sb.ToString(), (New-Object System.Text.UTF8Encoding($false)))
 $lines = ($sb.ToString() -split "`n").Count
-Write-Host "Note générée : $lines lignes dont un tableau de 50 lignes"
+Write-Host "Note générée : $lines lignes dont un tableau de 50 lignes, 5 schémas mermaid, 5 alertes, du texte surligné"
 
 $settings = @{
   root_dir = $notes
   open_tabs = @("grosse-note.md")
   active_tab = "grosse-note.md"
   recent_emojis = @()
-  window_effect = "mica"
 } | ConvertTo-Json
 $settingsPath = Join-Path $bin "mdnote.settings.json"
 $log = Join-Path $env:TEMP "mdnote-startup.log"

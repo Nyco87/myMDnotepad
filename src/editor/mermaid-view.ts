@@ -18,9 +18,26 @@ const idle = (): Promise<void> =>
 
 let chain: Promise<unknown> = Promise.resolve();
 
-/** Runs `task` after the previous queued tasks, once the browser is idle. A task that throws does not block the queue. */
+/**
+ * Start-up gate: while held, no diagram is drawn (so mermaid is not even loaded). `main` holds it first thing and
+ * releases it once the window is ready, which keeps mermaid off the start-up critical path. Open by default.
+ */
+let gate: Promise<void> = Promise.resolve();
+let openGate: (() => void) | null = null;
+
+export function holdDiagramRendering(): void {
+  if (openGate) return;
+  gate = new Promise((resolve) => (openGate = resolve));
+}
+
+export function releaseDiagramRendering(): void {
+  openGate?.();
+  openGate = null;
+}
+
+/** Runs `task` after the previous queued tasks, once the gate is open and the browser is idle. A task that throws does not block the queue. */
 function enqueue<T>(task: () => Promise<T>): Promise<T> {
-  const run = chain.then(idle).then(task);
+  const run = chain.then(() => gate).then(idle).then(task);
   chain = run.catch(() => {});
   return run;
 }
