@@ -129,15 +129,15 @@ export function createTabs(o: TabsOptions): TabsController {
   const askDiscard = o.confirmDiscard ?? ((m: string, ok: string) => confirmDialog(m, ok, "Annuler"));
   const unreadableMessage = (rel: string): string =>
     `La note « ${noteTitle(rel)} » ne peut pas être lue sur le disque : ses modifications sont gardées en mémoire.`;
-  /** Note illisible avec des modifications en attente : demande s'il faut les abandonner (true = abandonnées). */
-  const discardUnreadable = async (list: Tab[], ok: string, question: string): Promise<boolean> => {
+  /** Note illisible avec des modifications en attente : demande s'il faut les abandonner (null = abandonnées, sinon l'onglet dont la confirmation a été refusée). */
+  const discardUnreadable = async (list: Tab[], ok: string, question: string): Promise<Tab | null> => {
     // Toutes les confirmations d'abord ; on n'abandonne rien tant qu'une seule a été refusée.
     const risky = list.filter((t) => t.unreadable !== null && t.saver.pending());
     for (const t of risky) {
-      if (!(await askDiscard(`${unreadableMessage(t.rel)} ${question}`, ok))) return false;
+      if (!(await askDiscard(`${unreadableMessage(t.rel)} ${question}`, ok))) return t;
     }
     for (const t of risky) t.saver.discard();
-    return true;
+    return null;
   };
   /** Message pour un enregistrement raté ; rien pour une note illisible (le bandeau l'explique déjà). */
   const saveFailure = (rel: string, e: unknown): string | null => {
@@ -444,7 +444,7 @@ export function createTabs(o: TabsOptions): TabsController {
     async close(rel) {
       const tab = find(rel);
       if (!tab) return true;
-      if (!(await discardUnreadable([tab], "Fermer sans enregistrer", "Fermer sans enregistrer ?"))) return false;
+      if (await discardUnreadable([tab], "Fermer sans enregistrer", "Fermer sans enregistrer ?")) return false;
       try {
         // Des frappes pendant l'enregistrement peuvent remettre du contenu en file : on recommence (borné).
         for (let i = 0; i < 5 && (tab.saver.pending() || tab.conflicts.length > 0); i++) {
@@ -497,19 +497,17 @@ export function createTabs(o: TabsOptions): TabsController {
 
     async flushAll() {
       const all = tabs.slice();
-      if (!(await discardUnreadable(all, "Fermer sans enregistrer", "Fermer sans enregistrer ?"))) {
-        const t = all.find((x) => x.unreadable !== null && x.saver.pending()) ?? all[0];
-        throw new Error(unreadableMessage(t.rel));
-      }
+      const refused = await discardUnreadable(all, "Fermer sans enregistrer", "Fermer sans enregistrer ?");
+      if (refused) throw new Error(unreadableMessage(refused.rel));
       const results = await Promise.allSettled(
-        tabs.map(async (t) => {
+        all.map(async (t) => {
           await t.saver.flush();
           await settleConflicts(t);
         }),
       );
       const failedIdx = results.findIndex((r) => r.status === "rejected");
       if (failedIdx >= 0) {
-        throw new Error(friendly(tabs[failedIdx]?.rel ?? "", (results[failedIdx] as PromiseRejectedResult).reason));
+        throw new Error(friendly(all[failedIdx]?.rel ?? "", (results[failedIdx] as PromiseRejectedResult).reason));
       }
     },
 
@@ -540,10 +538,8 @@ export function createTabs(o: TabsOptions): TabsController {
       // D'abord enregistrer les frappes en file : une écriture faite après le renommage partirait de l'ancien contenu
       // (anciens liens d'images). Si l'enregistrement échoue, on refuse : l'appelant annule l'opération.
       const held = tabs.filter((t) => under(t.rel, prefix));
-      if (!(await discardUnreadable(held, "Continuer sans enregistrer", "Continuer sans enregistrer ?"))) {
-        const t = held.find((x) => x.unreadable !== null && x.saver.pending()) ?? held[0];
-        throw new Error(`${unreadableMessage(t.rel)} Opération annulée.`);
-      }
+      const refused = await discardUnreadable(held, "Continuer sans enregistrer", "Continuer sans enregistrer ?");
+      if (refused) throw new Error(`${unreadableMessage(refused.rel)} Opération annulée.`);
       for (const t of held) {
         try {
           await t.saver.flush();

@@ -335,7 +335,7 @@ describe("tabs controller", () => {
     editors.get("a.md")!.type("local-a");
     editors.get("b.md")!.type("local-b");
     confirmDiscard.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
-    await expect(tabs.flushAll()).rejects.toThrow(/ne peut pas être lue sur le disque/);
+    await expect(tabs.flushAll()).rejects.toThrow(/La note « b »/); // celle dont la confirmation a été refusée
     expect(confirmDiscard).toHaveBeenCalledTimes(2);
     // L'onglet a.md n'a rien perdu : une fois la lecture rétablie, ses modifications sont enregistrées.
     io.readNote.mockImplementation(real);
