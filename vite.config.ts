@@ -16,6 +16,7 @@ export default defineConfig(() => ({
   test: {
     environment: "node",
     setupFiles: ["src/test-support/setup.ts"],
+    coverage: { provider: "v8", include: ["src/**/*.ts"], exclude: ["src/**/*.test.ts", "src/test-support/**"], reporter: ["text-summary", "lcov", "json-summary"] },
   },
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {

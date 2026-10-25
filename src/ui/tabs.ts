@@ -545,6 +545,7 @@ export function createTabs(o: TabsOptions): TabsController {
         try {
           await h.saver.flush();
         } catch (e) {
+          // eslint-disable-next-line preserve-caught-error -- ES2020 lib has no Error `cause` option
           throw new Error(t("tabs.notSavedAbort", { title: noteTitle(h.rel), err: friendly(h.rel, e) }));
         }
       }

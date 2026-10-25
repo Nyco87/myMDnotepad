@@ -2,6 +2,7 @@
  * Les messages d'erreur du backend Rust sont écrits en français (et les codes `SETTINGS_*` / `PATH_NOT_FOUND`
  * sont des identifiants) : en anglais, on les traduit ici. En français, le texte est renvoyé tel quel.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- accepts any i18n key
 type T = (key: any, params?: Record<string, string | number>) => string;
 
 const RULES: [RegExp, string][] = [
