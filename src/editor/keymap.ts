@@ -8,7 +8,7 @@ import {
   wrapIn as pmWrapIn,
 } from "prosemirror-commands";
 import { splitListItem } from "prosemirror-schema-list";
-import { Selection, TextSelection, type Command, type Plugin } from "prosemirror-state";
+import { NodeSelection, Selection, TextSelection, type Command, type Plugin } from "prosemirror-state";
 import type { Schema } from "prosemirror-model";
 import { schema as defaultSchema } from "../markdown/schema";
 import { tabNextCell, tabPrevCell } from "./tables";
@@ -115,7 +115,10 @@ const fenceOrRuleOnEnter: Command = (state, dispatch) => {
     if (dispatch) {
       const block = code_block.create({ language: fence[1] });
       const tr = state.tr.replaceWith($from.before(), $from.after(), block);
-      tr.setSelection(TextSelection.create(tr.doc, $from.before() + 1));
+      // Un schéma mermaid n'a pas de zone de saisie : on sélectionne le bloc plutôt que de laisser le curseur dedans.
+      tr.setSelection(
+        fence[1] === "mermaid" ? NodeSelection.create(tr.doc, $from.before()) : TextSelection.create(tr.doc, $from.before() + 1),
+      );
       dispatch(tr.scrollIntoView());
     }
     return true;

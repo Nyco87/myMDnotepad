@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
+import { NodeSelection } from "prosemirror-state";
 import { makeEditor, typeInto, pressKey, cursorAtEnd, setCursor, setRange } from "./test-helpers";
 
 describe("shortcuts", () => {
@@ -67,6 +68,15 @@ describe("sticky blocks", () => {
     expect(ed.view.state.selection.$from.node(-1).type.name).toBe("blockquote");
     typeInto(ed.view, "l2");
     expect(ed.getMarkdown().trim()).toBe("> l1\n> l2");
+  });
+
+  it("fence_mermaid_enter_selects_the_block_instead_of_hiding_the_caret", () => {
+    const ed = makeEditor("");
+    typeInto(ed.view, "```mermaid");
+    pressKey(ed.view, "Enter");
+    const sel = ed.view.state.selection;
+    expect(sel instanceof NodeSelection).toBe(true);
+    expect((sel as NodeSelection).node.attrs.language).toBe("mermaid");
   });
 
   it("enter_in_code_block_stays", () => {
