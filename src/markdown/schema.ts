@@ -257,11 +257,13 @@ export const marks: Record<string, MarkSpec> = {
         tag: "a[href]",
         getAttrs: (dom) => {
           const el = dom as HTMLElement;
-          return { href: el.getAttribute("href"), title: el.getAttribute("title") };
+          const title = el.getAttribute("title");
+          // Old/pasted HTML may carry the editor tooltip: it is never a real title.
+          return { href: el.getAttribute("href"), title: title === "Ctrl+clic pour ouvrir" ? null : title };
         },
       },
     ],
-    toDOM: (mark) => ["a", { href: mark.attrs.href, title: mark.attrs.title || "Ctrl+clic pour ouvrir" }, 0],
+    toDOM: (mark) => ["a", { href: mark.attrs.href, title: mark.attrs.title }, 0],
   },
 
   code: {

@@ -366,6 +366,10 @@ body {
   position: relative; display: flex; align-items: center; gap: 4px;
   min-height: 26px; padding-right: 8px; border-radius: 4px; cursor: default; user-select: none; color: var(--text);
 }
+.link-tip {
+  position: fixed; z-index: 2500; padding: 3px 8px; border-radius: 4px; background: #2b2b2b; color: var(--text);
+  border: 1px solid var(--border); font-size: 12px; pointer-events: none; white-space: nowrap;
+}
 .sb-row.folder { color: var(--accent); font-weight: 700; font-style: italic; }
 .sb-row:hover { background: rgba(255, 255, 255, 0.07); }
 .sb-row.selected { background: var(--accent-tint-12); }

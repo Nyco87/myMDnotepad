@@ -61,10 +61,38 @@ export interface LinkContext {
  * Ctrl+clic sur un lien : l'ouvre. Un clic simple garde son rôle (placer le curseur). `get` est lu à chaque
  * événement (le chemin de la note peut changer ; sans gestionnaires rien ne s'ouvre).
  */
+export const LINK_TIP = "Ctrl+clic pour ouvrir";
+
 export function linkOpenPlugin(get: () => LinkContext): Plugin {
+  // Tooltip: a floating element, never an attribute of the document DOM (it would leak into copy/paste).
+  let tip: HTMLElement | null = null;
+  const hideTip = (): void => {
+    tip?.remove();
+    tip = null;
+  };
   return new Plugin({
+    view: () => ({ destroy: hideTip }),
     props: {
       handleDOMEvents: {
+        mouseover(_view, event) {
+          const a = (event.target as HTMLElement | null)?.closest?.("a[href]") as HTMLElement | null;
+          if (!a) return false;
+          if (!tip) {
+            tip = document.createElement("div");
+            tip.className = "link-tip";
+            tip.textContent = LINK_TIP;
+            document.body.appendChild(tip);
+          }
+          const r = a.getBoundingClientRect();
+          tip.style.left = `${r.left}px`;
+          tip.style.top = `${r.bottom + 4}px`;
+          return false;
+        },
+        mouseout(_view, event) {
+          const to = (event as MouseEvent).relatedTarget as HTMLElement | null;
+          if (!to?.closest?.("a[href]")) hideTip();
+          return false;
+        },
         click(_view, event) {
           const e = event as MouseEvent;
           if (!e.ctrlKey && !e.metaKey) return false;

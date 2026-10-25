@@ -87,6 +87,21 @@ function taskListRule(schema: Schema): InputRule {
   });
 }
 
+/** `---` / `***` / `___` alone in a paragraph, then a space: a horizontal rule and an empty paragraph after it. */
+function horizontalRuleRule(schema: Schema): InputRule {
+  const { horizontal_rule, paragraph } = schema.nodes;
+  return new InputRule(/^(?:---|\*\*\*|___)\s$/, (state, _match, start, end) => {
+    const $s = state.doc.resolve(start);
+    if ($s.parent.type !== paragraph || $s.parent.content.size !== end - start) return null;
+    const container = $s.node($s.depth - 1);
+    const index = $s.index($s.depth - 1);
+    if (!container.canReplaceWith(index, index + 1, horizontal_rule)) return null;
+    const before = $s.before();
+    const tr = state.tr.replaceWith(before, before + $s.parent.nodeSize, [horizontal_rule.create(), paragraph.create()]);
+    return tr.setSelection(TextSelection.create(tr.doc, before + 2));
+  });
+}
+
 export function buildInputRules(schema: Schema): Plugin {
   const { heading, blockquote, bullet_list, ordered_list } = schema.nodes;
   const { strong, em, strike, highlight, code } = schema.marks;
@@ -95,6 +110,7 @@ export function buildInputRules(schema: Schema): Plugin {
     rules: [
       textblockTypeInputRule(/^(#{1,6})\s$/, heading, (m) => ({ level: m[1].length })),
       wrappingInputRule(/^\s*>\s$/, blockquote),
+      horizontalRuleRule(schema),
       taskListRule(schema),
       taskItemInListRule(schema),
       wrappingInputRule(/^\s*([-+*])\s$/, bullet_list),

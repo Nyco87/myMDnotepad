@@ -51,4 +51,36 @@ describe("horizontal rule on Enter", () => {
     ed.view.state.doc.descendants((n) => { if (n.type.name === "horizontal_rule") hr = true; });
     expect(hr).toBe(false);
   });
+
+  for (const marker of ["---", "***", "___"]) {
+    it(`typing_${marker}_then_space_creates_rule`, () => {
+      const ed = makeEditor("");
+      typeInto(ed.view, marker + " ");
+      const names: string[] = [];
+      ed.view.state.doc.forEach((n) => names.push(n.type.name));
+      expect(names).toEqual(["horizontal_rule", "paragraph"]);
+      expect(ed.view.state.selection.$from.pos).toBe(2);
+    });
+  }
+
+  it("space_rule_not_after_other_text_nor_in_code_nor_cells_and_bullet_still_works", () => {
+    const ed = makeEditor("");
+    typeInto(ed.view, "a--- ");
+    expect(ed.view.state.doc.firstChild!.type.name).toBe("paragraph");
+    const bl = makeEditor("");
+    typeInto(bl.view, "- ");
+    expect(bl.view.state.doc.firstChild!.type.name).toBe("bullet_list");
+    const code = makeEditor("```\n\n```\n");
+    cursorAtEnd(code.view);
+    typeInto(code.view, "--- ");
+    expect(code.view.state.doc.firstChild!.type.name).toBe("code_block");
+    const t = makeEditor("| a | b |\n| --- | --- |\n| 1 | 2 |\n");
+    let pos = -1;
+    t.view.state.doc.descendants((n, p) => { if (pos < 0 && n.type.name === "table_cell") pos = p + 2; });
+    t.view.dispatch(t.view.state.tr.setSelection((t.view.state.selection.constructor as any).near(t.view.state.doc.resolve(pos))));
+    typeInto(t.view, "--- ");
+    let hr = false;
+    t.view.state.doc.descendants((n) => { if (n.type.name === "horizontal_rule") hr = true; });
+    expect(hr).toBe(false);
+  });
 });

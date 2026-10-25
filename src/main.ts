@@ -238,7 +238,9 @@ async function main(): Promise<void> {
   /** Ctrl+clic sur un lien vers une note : l'ouvre dans un onglet, ou signale qu'elle n'existe pas. */
   const openLinkedNote = async (rel: string): Promise<void> => {
     if (!tabs) return;
-    if (!tabs.list().includes(rel)) {
+    const known = tabs.list().find((t) => t.toLowerCase() === rel.toLowerCase());
+    if (known) rel = known;
+    if (!known) {
       try {
         await readNote(rel);
       } catch (e) {

@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import { resolveLink, routeLink } from "./links";
+import { DOMParser } from "prosemirror-model";
+import { schema } from "../markdown/schema";
+import { serializeMarkdown } from "../markdown/serialize";
 import { createEditor, type EditorHandle } from "./editor";
 import { cursorAtEnd, pressKey, setCursor } from "./test-helpers";
 
@@ -109,9 +112,22 @@ describe("link click handler", () => {
     expect(ed.getMarkdown()).toContain("- [x] t");
   });
 
-  it("links_get_a_ctrl_click_tooltip_unless_they_have_a_title", () => {
-    const { ed } = make('[x](https://a.fr) [y](https://b.fr "Mon titre")\n');
-    expect((ed.view.dom.querySelector('a[href="https://a.fr"]') as HTMLElement).title).toBe("Ctrl+clic pour ouvrir");
-    expect((ed.view.dom.querySelector('a[href="https://b.fr"]') as HTMLElement).title).toBe("Mon titre");
+  it("hover_shows_a_floating_tooltip_and_never_writes_a_title_into_the_document", () => {
+    const { ed } = make("[x](https://a.fr)\n");
+    const a = ed.view.dom.querySelector("a")!;
+    a.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    expect(document.querySelector(".link-tip")?.textContent).toBe("Ctrl+clic pour ouvrir");
+    expect(a.hasAttribute("title")).toBe(false);
+    a.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+    expect(document.querySelector(".link-tip")).toBeNull();
+    expect(ed.getMarkdown()).toBe("[x](https://a.fr)\n");
+  });
+
+  it("a_tooltip_title_in_pasted_html_is_not_kept_as_a_link_title", () => {
+    const { ed } = make("[x](https://a.fr)\n");
+    const a = ed.view.dom.querySelector("a")!;
+    a.setAttribute("title", "Ctrl+clic pour ouvrir");
+    const doc = DOMParser.fromSchema(schema).parse(a.parentElement!);
+    expect(serializeMarkdown(doc)).toBe("[x](https://a.fr)\n");
   });
 });
