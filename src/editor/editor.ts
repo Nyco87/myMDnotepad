@@ -15,6 +15,7 @@ import { tableControlsPlugin } from "./tables";
 import { imageNodeView, imagePastePlugin } from "./images";
 import { taskItemView } from "./task-item";
 import { alertView } from "./alerts";
+import { codeBlockView, type EditDiagram } from "./mermaid-view";
 import { gapClickPlugin } from "./gap-click";
 import { slashMenuPlugin, type SlashCommand } from "./slash";
 import { parseMarkdown } from "../markdown/parse";
@@ -38,6 +39,8 @@ export interface EditorOptions {
   onError?: (message: string) => void;
   /** Commands of the « / » menu. Read lazily; without it the menu never opens. */
   slashCommands?: () => SlashCommand[];
+  /** Click on a mermaid diagram: position of its code block and its code. Read lazily. */
+  onEditDiagram?: EditDiagram;
 }
 
 /**
@@ -65,7 +68,12 @@ function buildPlugins(schema: Schema, opts: EditorOptions): Plugin[] {
 
 /** Node views registered in one place. */
 function buildNodeViews(opts: EditorOptions): Record<string, NodeViewConstructor> {
-  return { image: imageNodeView(() => opts.noteRel), task_item: taskItemView, alert: alertView };
+  return {
+    image: imageNodeView(() => opts.noteRel),
+    task_item: taskItemView,
+    alert: alertView,
+    code_block: codeBlockView(() => opts.onEditDiagram),
+  };
 }
 
 export function createEditor(mount: HTMLElement, opts: EditorOptions): EditorHandle {

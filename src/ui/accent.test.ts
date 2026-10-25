@@ -46,6 +46,7 @@ test("initAccent applies the current accent and follows live changes", async () 
 
 describe("highlight style", () => {
   test("is derived from the accent, not a fixed amber", async () => {
+    // @ts-expect-error type error without @types/node package
     const { readFileSync } = await import("node:fs");
     const css = readFileSync("src/styles/theme.css", "utf8");
     const rule = /\.ProseMirror mark \{[^}]*\}/.exec(css)![0];

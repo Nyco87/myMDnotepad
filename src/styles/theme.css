@@ -489,3 +489,17 @@ body {
 /* ---- Sélection et curseur suivent l'accent ---- */
 ::selection { background: var(--accent-tint-35); }
 .ProseMirror { caret-color: var(--accent); }
+
+/* ---- Schémas mermaid ---- */
+.ProseMirror .diagram {
+  margin: 0.8em 0; padding: 14px; border: 1px solid var(--border); border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03); text-align: center; cursor: pointer; overflow-x: auto;
+}
+.ProseMirror .diagram:hover { border-color: var(--accent); }
+.ProseMirror .diagram svg { max-width: 100%; height: auto; }
+.ProseMirror .diagram.diagram-pending { min-height: 56px; opacity: 0.55; }
+.ProseMirror .diagram.diagram-pending::after { content: "Dessin du schéma…"; color: #9a9a9a; }
+.ProseMirror .diagram.diagram-pending svg { display: none; }
+.ProseMirror .diagram-error { text-align: left; }
+.ProseMirror .diagram-error-message { color: #f0a09a; font-size: 12px; margin-bottom: 6px; white-space: pre-wrap; }
+.ProseMirror .diagram-error pre { margin: 0; max-height: 160px; overflow: auto; font-size: 12px; }
