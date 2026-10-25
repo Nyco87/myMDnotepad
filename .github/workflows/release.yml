@@ -12,9 +12,9 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -38,7 +38,7 @@ jobs:
         run: gh release upload "${{ github.event.release.tag_name }}" src-tauri/target/release/mymdnotepad.exe --clobber
 
       - name: Keep exe as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mymdnotepad
           path: src-tauri/target/release/mymdnotepad.exe
