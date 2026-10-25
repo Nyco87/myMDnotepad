@@ -6,6 +6,13 @@ updates:
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # prosemirror-markdown dépend encore de markdown-it 14 : deux lecteurs Markdown différents mettraient en risque la fidélité des fichiers.
+      - dependency-name: markdown-it
+        versions: [">=15.0.0 <16.0.0"]
+      # typescript-eslint ne prend pas encore en charge TypeScript 7.
+      - dependency-name: typescript
+        versions: [">=7.0.0 <8.0.0"]
   - package-ecosystem: cargo
     directory: /src-tauri
     schedule: { interval: weekly }
