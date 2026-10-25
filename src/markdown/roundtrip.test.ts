@@ -59,8 +59,8 @@ Fin de la note.
 
 describe("pretty markdown", () => {
   test("headings become ATX", () => expect(pretty("Titre\n=====\n")).toBe("# Titre\n"));
-  test("one blank line between blocks, single trailing newline", () =>
-    expect(pretty("# A\n\n\n\npara\n\n\n")).toBe("# A\n\npara\n"));
+  test("extra blank lines between blocks are kept, single trailing newline", () =>
+    expect(pretty("# A\n\n\n\npara\n\n\n")).toBe("# A\n\n\n\npara\n"));
   test("bullets normalised to -", () => expect(pretty("* a\n+ b\n")).toBe("- a\n- b\n"));
   test("ordered lists use 1.", () => expect(pretty("1) a\n2) b\n")).toBe("1. a\n1. b\n"));
   test("ordered list keeps a non-1 start", () => expect(pretty("3. a\n4. b\n")).toBe("3. a\n1. b\n"));
@@ -112,7 +112,7 @@ describe("pretty markdown — extra guarantees", () => {
   test("entity-built html is escaped, not turned into html", () =>
     expect(pretty("&lt;b&gt; &amp;amp;\n")).toBe("\\<b> \\&amp;\n"));
   test("adjacent lists (different markers) merge as one tight list", () =>
-    expect(pretty("- a\n\n\n* b\n")).toBe("- a\n- b\n"));
+    expect(pretty("* a\n+ b\n")).toBe("- a\n- b\n"));
   test("lone * between spaces is not escaped", () => expect(pretty("5 * 3 et a \\*b\\*\n")).toBe("5 * 3 et a \\*b\\*\n"));
   test("empty document gives empty string", () => expect(pretty("\n\n")).toBe(""));
   test("CRLF input gives LF output", () => expect(pretty("# A\r\n\r\nb\r\n")).toBe("# A\n\nb\n"));
@@ -208,5 +208,60 @@ describe("highlight ==text==", () => {
   test("escaped == is text and stays escaped (no accidental highlight)", () => {
     expect(parseMarkdown("\\=\\=x\\=\\=\n").firstChild!.firstChild!.marks.length).toBe(0);
     expect(pretty("\\=\\=x\\=\\=\n")).toBe("\\=\\=x\\=\\=\n");
+  });
+});
+
+describe("kept blank lines (at least one blank line between blocks)", () => {
+  const empties = (md: string) => {
+    const doc = parseMarkdown(md);
+    let n = 0;
+    doc.forEach((c) => {
+      if (c.type.name === "paragraph" && c.content.size === 0) n++;
+    });
+    return n;
+  };
+  test("extra blank lines roundtrip byte-identical as empty paragraphs", () => {
+    expect(pretty("a\n\n\n\nb\n")).toBe("a\n\n\n\nb\n");
+    expect(empties("a\n\n\n\nb\n")).toBe(2);
+  });
+  test("a single blank line stays a plain separator", () => {
+    expect(empties("a\n\nb\n")).toBe(0);
+    expect(pretty("a\n\nb\n")).toBe("a\n\nb\n");
+  });
+  test("table, empty paragraph, alert", () => {
+    const md = "| a   | b   |\n| --- | --- |\n| 1   | 2   |\n\n\n> [!NOTE]\n> x\n";
+    expect(pretty(md)).toBe(md);
+    expect(empties(md)).toBe(1);
+  });
+  test("fenced code and lists", () => {
+    const md = "```\nx\n\n\ny\n```\n\n\n- a\n- b\n\n\n\n1. c\n";
+    expect(pretty(md)).toBe(md);
+  });
+  test("two lists with the same marker stay apart across blank lines", () => {
+    const md = "- a\n\n\n* b\n";
+    const out = pretty(md);
+    expect(out).toBe(md);
+    expect(pretty(out)).toBe(out);
+  });
+  test("trailing and leading empty paragraphs are not kept", () => {
+    expect(pretty("a\n\n\n\n")).toBe("a\n");
+    expect(pretty("\n\n\na\n")).toBe("a\n");
+  });
+  test("idempotent", () => {
+    const once = pretty("a\n\n\n\n\nb\n\n\nc\n");
+    expect(pretty(once)).toBe(once);
+  });
+  test("raw blocks and headings keep the gap", () => {
+    const md = "# T\n\n\n<div>\nx\n</div>\n\n\n\n## U\n";
+    expect(pretty(md)).toBe(md);
+  });
+  test("editor-made empty paragraph is written as one extra blank line", () => {
+    const doc = parseMarkdown("a\n\nb\n");
+    const empty = doc.type.schema.nodes.paragraph.create();
+    const withEmpty = doc.type.create(null, [doc.child(0), empty, doc.child(1)]);
+    expect(serializeMarkdown(withEmpty)).toBe("a\n\n\nb\n");
+  });
+  test("an empty paragraph in a table cell does not leak", () => {
+    expect(pretty("| a | b |\n| --- | --- |\n| 1 | 2 |\n")).toBe("| a   | b   |\n| --- | --- |\n| 1   | 2   |\n");
   });
 });

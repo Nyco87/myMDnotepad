@@ -135,9 +135,18 @@ const BULLETISH = new Set(["bullet_list", "task_list"]);
 function alternateMarker(node: Node, parent: Node, index: number): boolean {
   const family = (n: Node | null) => (n ? (BULLETISH.has(n.type.name) ? "bullet" : n.type.name) : null);
   let alternate = false;
-  for (let i = index - 1; i >= 0 && family(parent.child(i)) === family(node); i--) alternate = !alternate;
+  // Empty paragraphs (kept blank lines) do not keep two lists apart: they merge across blank lines too.
+  for (let i = index - 1; i >= 0; i--) {
+    if (isEmptyParagraph(parent.child(i))) continue;
+    if (family(parent.child(i)) !== family(node)) break;
+    alternate = !alternate;
+  }
   return alternate;
 }
+
+/** One extra blank line, written by an empty paragraph; `tidy` would collapse a real blank line, so it is a marker line. */
+const EMPTY_LINE = "\u0000E\u0000";
+const isEmptyParagraph = (n: Node): boolean => n.type.name === "paragraph" && n.content.size === 0;
 
 function list(state: State, node: Node, delim: string, firstDelim: (i: number) => string): void {
   // Upstream would separate two same-type lists by two blank lines; one is enough
@@ -203,13 +212,27 @@ function expandRaw(md: string): string {
 /** Inline markdown of one table cell, on a single line. */
 function cellMarkdown(cell: Node): string {
   const md = serializer.serialize(cell.type.schema.topNodeType.create(null, cell.content));
-  return expandRaw(md).trim().replace(/\n+/g, "<br>");
+  return expandRaw(md.replace(/\u0000E\u0000/g, "")).trim().replace(/\n+/g, "<br>");
 }
 
 const nodes: Record<string, NodeRule> = {
-  paragraph(state, node) {
-    // An empty paragraph has no markdown form; writing nothing avoids stray blank lines.
-    if (node.content.size === 0) return;
+  paragraph(state, node, parent, index) {
+    if (node.content.size === 0) {
+      // An empty paragraph between two top-level blocks is one extra blank line; elsewhere (start, end, inside a
+      // container) it has no markdown form and writes nothing.
+      let before = false;
+      let after = false;
+      for (let i = 0; i < parent.childCount; i++) {
+        if (isEmptyParagraph(parent.child(i))) continue;
+        if (i < index) before = true;
+        else after = true;
+      }
+      if (parent.type.name === "doc" && before && after) {
+        (state as State).flushClose();
+        (state as State).out += EMPTY_LINE + "\n";
+      }
+      return;
+    }
     state.renderInline(node);
     state.closeBlock(node);
   },
@@ -403,7 +426,8 @@ const serializer = new MarkdownSerializer(nodes, marks, { strict: true });
 
 /**
  * Final normalisation: LF only, at most one blank line between blocks (outside
- * fenced code, whose content is verbatim), exactly one trailing newline.
+ * fenced code, whose content is verbatim) plus one per empty paragraph (marker lines,
+ * restored last), exactly one trailing newline.
  */
 function tidy(md: string): string {
   const lines = md.replace(/\r\n?/g, "\n").split("\n");
@@ -426,7 +450,7 @@ function tidy(md: string): string {
 export function serializeMarkdown(doc: Node): string {
   rawStore = [];
   try {
-    return expandRaw(tidy(serializer.serialize(doc)));
+    return expandRaw(tidy(serializer.serialize(doc)).replace(/^\u0000E\u0000$/gm, ""));
   } finally {
     rawStore = [];
   }

@@ -160,10 +160,39 @@ function alertTokens(state: StateCore): void {
   }
 }
 
+const BLANK_LINE = /^[ \t]*$/;
+
+/**
+ * "At least one blank line between blocks": each blank line beyond the first, between two top-level blocks,
+ * becomes an empty paragraph (the serializer writes it back as one extra blank line). Lines are counted from
+ * markdown-it's own line maps; trailing blank lines of a block are not part of it.
+ */
+function blankLineParagraphs(state: StateCore): void {
+  const lines = state.src.split("\n");
+  const out: Token[] = [];
+  let prevEnd: number | null = null;
+  for (const t of state.tokens) {
+    if (t.level === 0 && t.nesting !== -1 && t.map) {
+      if (prevEnd !== null)
+        for (let k = 1; k < t.map[0] - prevEnd; k++) {
+          const inline = new state.Token("inline", "", 0);
+          inline.children = [];
+          out.push(new state.Token("paragraph_open", "p", 1), inline, new state.Token("paragraph_close", "p", -1));
+        }
+      let end = t.map[1];
+      while (end > t.map[0] && BLANK_LINE.test(lines[end - 1] ?? "")) end--;
+      prevEnd = end;
+    }
+    out.push(t);
+  }
+  state.tokens = out;
+}
+
 export const markdownIt = MarkdownIt("commonmark").enable(["strikethrough", "table"]).use(taskLists).use(rawPlugin).use(markPlugin);
 markdownIt.core.ruler.after("github-task-lists", "mdnote-task-tokens", taskTokens);
 markdownIt.core.ruler.push("mdnote-cell-paragraphs", cellParagraphs);
 markdownIt.core.ruler.push("mdnote-alerts", alertTokens);
+markdownIt.core.ruler.push("mdnote-blank-lines", blankLineParagraphs);
 // Keep link/image destinations as written (after backslash unescaping) instead
 // of markdown-it's percent-encoded form: the file must not change on save
 // ("images/schéma.png" stays readable) and `<https://x.y/é>` stays an autolink.

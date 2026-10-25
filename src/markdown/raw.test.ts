@@ -92,7 +92,7 @@ describe("raw — extra guarantees", () => {
     verbatim("texte[^n]\n\n[^n]: première ligne\n\n    suite indentée"));
   test("blank lines inside an HTML comment are kept", () => verbatim("<!--\na\n\n\n\nb\n-->"));
   test("fence-like lines inside raw do not confuse the blank-line tidy", () =>
-    expect(pretty("<div>\n```\n</div>\n\n\n\npara\n")).toBe("<div>\n```\n</div>\n\npara\n"));
+    expect(pretty("<div>\n```\n</div>\n\n\n\npara\n")).toBe("<div>\n```\n</div>\n\n\n\npara\n"));
   test("math inside fenced code is not raw", () =>
     expect(names(parseMarkdown("```\n$x$ [^1] [a][b]\n```\n"))).toEqual(["code_block", "text"]));
   test("raw block inside a blockquote", () => {
