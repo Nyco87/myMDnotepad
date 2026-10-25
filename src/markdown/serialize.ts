@@ -110,14 +110,23 @@ function isBreak(node: Node | null | undefined): boolean {
   return node?.type.name === "hard_break";
 }
 
+/**
+ * Doubles a backslash only where Markdown would read it as an escape: before ASCII punctuation
+ * or at the end (just before the closing delimiter). `a\b` stays as written.
+ */
+function escapeBackslashes(s: string): string {
+  return s.replace(/\\(?=[!-/:-@[-`{-~]|$)/g, "\\\\");
+}
+
 /** Destination of a link/image: wrapped in <> when it contains spaces. */
 function destination(url: string): string {
-  if (/[\s<>]/.test(url)) return "<" + url.replace(/[<>]/g, "\\$&") + ">";
-  return url.replace(/[()]/g, "\\$&");
+  const s = escapeBackslashes(url);
+  if (/[\s<>]/.test(url)) return "<" + s.replace(/(?<!\\)(\\\\)*[<>]/g, (m) => m.slice(0, -1) + "\\" + m.slice(-1)) + ">";
+  return s.replace(/(?<!\\)(\\\\)*[()]/g, (m) => m.slice(0, -1) + "\\" + m.slice(-1));
 }
 
 function titlePart(title: string | null): string {
-  return title ? ' "' + title.replace(/"/g, '\\"') + '"' : "";
+  return title ? ' "' + escapeBackslashes(title).replace(/(?<!\\)(\\\\)*"/g, (m) => m.slice(0, -1) + '\\"') + '"' : "";
 }
 
 /** Blocks that can follow an alert marker on the next line without a blank line. */

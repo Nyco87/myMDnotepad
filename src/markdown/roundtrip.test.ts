@@ -265,3 +265,29 @@ describe("kept blank lines (at least one blank line between blocks)", () => {
     expect(pretty("| a | b |\n| --- | --- |\n| 1 | 2 |\n")).toBe("| a   | b   |\n| --- | --- |\n| 1   | 2   |\n");
   });
 });
+
+describe("backslashes in link destinations and titles (CodeQL js/incomplete-sanitization)", () => {
+  const hrefOf = (md: string) => {
+    let href: string | null = null;
+    parseMarkdown(md).descendants((n) => {
+      for (const m of n.marks) if (m.type.name === "link") href = m.attrs.href;
+      if (n.type.name === "image") href = n.attrs.src;
+    });
+    return href;
+  };
+  const hrefs = [String.raw`a\b`, String.raw`x\(y`, String.raw`x\)y`, String.raw`dir\ `.trim(), String.raw`C:\photos\(1).png`, String.raw`p\q r(1)`];
+  for (const href of hrefs) {
+    test(`href ${JSON.stringify(href)} survives serialize → parse`, () => {
+      const escaped = href.replace(/[\\<>]/g, (c) => "\\" + c);
+      const md = serializeMarkdown(parseMarkdown(`[t](<${escaped}>)\n`));
+      expect(hrefOf(md)).toBe(href);
+      expect(serializeMarkdown(parseMarkdown(md))).toBe(md);
+    });
+  }
+  test("plain backslash before a letter is left as written", () =>
+    expect(serializeMarkdown(parseMarkdown(String.raw`[t](a\b)` + "\n"))).toBe(String.raw`[t](a\b)` + "\n"));
+  test("title ending with a backslash survives", () => {
+    const md = serializeMarkdown(parseMarkdown('[t](u "say \\\\")\n'));
+    expect(md).toBe('[t](u "say \\\\")\n');
+  });
+});
