@@ -1,3 +1,4 @@
+import { t as tx } from "../../i18n";
 import type { PieModel } from "../model";
 import { paintErrors, validateModel, validateWarnings } from "../validate";
 import { addButton, clone, el, errorSlot, label, moveItem, rowTools, textInput } from "./ui";
@@ -16,22 +17,22 @@ export function mountPieEditor(root: HTMLElement, model: PieModel, onChange: (m:
 
   const render = (): void => {
     root.textContent = "";
-    root.appendChild(label("Titre"));
+    root.appendChild(label(tx("ws.titleLabel")));
     root.appendChild(
-      textInput(m.title, "Titre du camembert (facultatif)", (v) => {
+      textInput(m.title, tx("ws.pie.titlePh"), (v) => {
         m.title = v;
         emit();
       }),
     );
-    root.appendChild(label("Parts"));
+    root.appendChild(label(tx("ws.pie.slices")));
     m.slices.forEach((s, i) => {
       const row = el("div", "ws-row");
       row.append(
-        textInput(s.label, "Libellé", (v) => {
+        textInput(s.label, tx("ws.pie.label"), (v) => {
           s.label = v;
           emit();
         }),
-        textInput(Number.isNaN(s.value) ? "" : String(s.value), "Valeur", (v) => {
+        textInput(Number.isNaN(s.value) ? "" : String(s.value), tx("ws.pie.value"), (v) => {
           s.value = v.trim() === "" ? NaN : Number(v.replace(",", "."));
           emit();
         }, "ws-in ws-num"),
@@ -53,7 +54,7 @@ export function mountPieEditor(root: HTMLElement, model: PieModel, onChange: (m:
       root.append(row, errs);
     });
     root.appendChild(
-      addButton("＋ Ajouter une part", () => {
+      addButton(tx("ws.pie.add"), () => {
         m.slices.push({ label: "", value: 0 });
         render();
         emit();

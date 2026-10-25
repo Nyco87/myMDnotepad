@@ -1,3 +1,4 @@
+import { t, type Key } from "../i18n";
 import { mountFlowEditor } from "./editors/flow-editor";
 import { mountGanttEditor } from "./editors/gantt-editor";
 import { mountPieEditor } from "./editors/pie-editor";
@@ -12,11 +13,11 @@ export interface WorkshopOptions {
   code?: string;
 }
 
-const TYPES: { kind: DiagramKind; icon: string; label: string }[] = [
-  { kind: "flow", icon: "🔀", label: "Flux / organigramme" },
-  { kind: "pie", icon: "🥧", label: "Camembert" },
-  { kind: "gantt", icon: "📅", label: "Gantt (planning)" },
-  { kind: "state", icon: "🔁", label: "États" },
+const TYPES: { kind: DiagramKind; icon: string; label: Key }[] = [
+  { kind: "flow", icon: "🔀", label: "ws.type.flow" },
+  { kind: "pie", icon: "🥧", label: "ws.type.pie" },
+  { kind: "gantt", icon: "📅", label: "ws.type.gantt" },
+  { kind: "state", icon: "🔁", label: "ws.type.state" },
 ];
 
 const EMPTY: Record<DiagramKind, DiagramModel> = {
@@ -28,7 +29,6 @@ const EMPTY: Record<DiagramKind, DiagramModel> = {
 
 /** Délai minimal entre deux dessins de l'aperçu pendant la saisie. */
 const PREVIEW_MS = 250;
-const NOT_READABLE = "Ce code ne peut pas être relu en briques";
 
 function mountEditor(root: HTMLElement, model: DiagramModel, onChange: (m: DiagramModel) => void): () => void {
   switch (model.kind) {
@@ -57,7 +57,7 @@ export function openDiagramWorkshop(opts: WorkshopOptions = {}): Promise<string 
     const dialog = el("div", "ws");
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
-    dialog.setAttribute("aria-label", "Atelier de schémas");
+    dialog.setAttribute("aria-label", t("ws.title"));
     dialog.tabIndex = -1;
     const title = el("b", "ws-title");
     const subtitle = el("span", "ws-subtitle");
@@ -73,8 +73,8 @@ export function openDiagramWorkshop(opts: WorkshopOptions = {}): Promise<string 
     const body = el("div", "ws-body");
     body.append(left, preview);
     const toggle = button("", "", () => onToggle(), "ws-btn ws-code-toggle");
-    const cancel = button("Annuler", "Annuler", () => finish(null), "ws-btn ws-cancel");
-    const insert = button("Insérer", "Insérer", () => onInsert(), "ws-btn ws-primary ws-insert");
+    const cancel = button(t("common.cancel"), t("common.cancel"), () => finish(null), "ws-btn ws-cancel");
+    const insert = button(t("ws.insert"), t("ws.insert"), () => onInsert(), "ws-btn ws-primary ws-insert");
     const actions = el("span", "ws-actions");
     actions.append(cancel, insert);
     const footer = el("div", "ws-foot");
@@ -104,7 +104,7 @@ export function openDiagramWorkshop(opts: WorkshopOptions = {}): Promise<string 
       lastRun = Date.now();
       const code = pending;
       const mine = ++seq;
-      if (code === null) return showHint("L'aperçu apparaîtra ici.");
+      if (code === null) return showHint(t("ws.previewHint"));
       void renderMermaid(code).then((result) => {
         if (done || mine !== seq) return;
         if (result.ok) {
@@ -142,14 +142,14 @@ export function openDiagramWorkshop(opts: WorkshopOptions = {}): Promise<string 
       insert.disabled = !canInsert();
       toggle.hidden = mode === "type";
       if (mode === "bricks") {
-        toggle.textContent = "Voir le code mermaid";
+        toggle.textContent = t("ws.viewCode");
         toggle.disabled = false;
         toggle.title = "";
       } else if (mode === "code") {
         const readable = parseDiagram(codeArea?.value ?? "") !== null;
-        toggle.textContent = "Revenir aux briques";
+        toggle.textContent = t("ws.backToBricks");
         toggle.disabled = !readable;
-        toggle.title = readable ? "" : NOT_READABLE;
+        toggle.title = readable ? "" : t("ws.notReadable");
       }
     };
 
@@ -165,19 +165,19 @@ export function openDiagramWorkshop(opts: WorkshopOptions = {}): Promise<string 
       mode = "type";
       model = null;
       clearLeft();
-      title.textContent = "① Nouveau schéma";
-      subtitle.textContent = "— quel type ?";
+      title.textContent = t("ws.newTitle");
+      subtitle.textContent = t("ws.whichType");
       const cards = el("div", "ws-types");
-      for (const t of TYPES) {
+      for (const ty of TYPES) {
         const card = el("button", "ws-type");
         card.type = "button";
-        card.dataset.kind = t.kind;
-        card.append(el("span", "ws-type-icon", t.icon), document.createTextNode(t.label));
-        card.addEventListener("click", () => showBricks(EMPTY[t.kind]));
+        card.dataset.kind = ty.kind;
+        card.append(el("span", "ws-type-icon", ty.icon), document.createTextNode(t(ty.label)));
+        card.addEventListener("click", () => showBricks(EMPTY[ty.kind]));
         cards.appendChild(card);
       }
       left.appendChild(cards);
-      showHint("Choisissez un type de schéma.");
+      showHint(t("ws.chooseType"));
       schedulePreview(null);
       refreshChrome();
     };
@@ -186,8 +186,8 @@ export function openDiagramWorkshop(opts: WorkshopOptions = {}): Promise<string 
       mode = "bricks";
       model = next;
       clearLeft();
-      const type = TYPES.find((t) => t.kind === next.kind)!;
-      title.textContent = `② ${type.label}`;
+      const type = TYPES.find((ty) => ty.kind === next.kind)!;
+      title.textContent = `② ${t(type.label)}`;
       subtitle.textContent = "";
       const host = el("div", "ws-bricks");
       left.appendChild(host);
@@ -205,12 +205,12 @@ export function openDiagramWorkshop(opts: WorkshopOptions = {}): Promise<string 
       mode = "code";
       model = null;
       clearLeft();
-      title.textContent = "② Code mermaid";
+      title.textContent = t("ws.codeTitle");
       subtitle.textContent = "";
       const area = el("textarea", "ws-code");
       area.value = text;
       area.spellcheck = false;
-      area.setAttribute("aria-label", "Code mermaid");
+      area.setAttribute("aria-label", t("ws.codeAria"));
       area.addEventListener("input", () => {
         refreshChrome();
         schedulePreview(area.value.trim() === "" ? null : area.value);

@@ -3,6 +3,8 @@
  * chunk séparé), jamais sur le chemin critique du démarrage.
  */
 
+import { t } from "../i18n";
+
 export type RenderResult = { ok: true; svg: string } | { ok: false; error: string; transient?: true };
 
 type Mermaid = typeof import("mermaid").default;
@@ -74,7 +76,7 @@ export async function renderMermaid(code: string): Promise<RenderResult> {
     document.getElementById(id)?.remove();
     document.getElementById(`d${id}`)?.remove();
     const message = e instanceof Error ? e.message : String(e);
-    const error = message.trim() || "Schéma illisible";
+    const error = message.trim() || t("diagram.unreadable");
     // Échec de chargement de mermaid (pas une erreur de syntaxe) : à retenter, à ne pas mémoriser.
     return loaded ? { ok: false, error } : { ok: false, error, transient: true };
   }

@@ -1,3 +1,4 @@
+import { t as tx } from "../../i18n";
 import type { StateModel } from "../model";
 import { paintErrors, validateModel } from "../validate";
 import { addButton, clone, el, errorSlot, label, moveItem, rowTools, selectBox, textInput, uid } from "./ui";
@@ -12,7 +13,7 @@ export function mountStateEditor(root: HTMLElement, model: StateModel, onChange:
     paintErrors(root, validateModel(m));
     onChange(clone(m));
   };
-  const name = (i: number): string => m.states[i].label.trim() || `(état ${i + 1})`;
+  const name = (i: number): string => m.states[i].label.trim() || tx("ws.state.unnamed", { n: i + 1 });
   const options = (): { value: string; label: string }[] => m.states.map((s, i) => ({ value: s.id, label: name(i) }));
   const refreshNames = (): void => {
     root.querySelectorAll<HTMLSelectElement>("select.ws-node-sel").forEach((select) => {
@@ -29,11 +30,11 @@ export function mountStateEditor(root: HTMLElement, model: StateModel, onChange:
 
   const render = (): void => {
     root.textContent = "";
-    root.appendChild(label("États"));
+    root.appendChild(label(tx("ws.state.states")));
     m.states.forEach((s, i) => {
       const row = el("div", "ws-row");
       row.append(
-        textInput(s.label, "Nom de l'état", (v) => {
+        textInput(s.label, tx("ws.state.name"), (v) => {
           s.label = v;
           refreshNames();
           emit();
@@ -57,7 +58,7 @@ export function mountStateEditor(root: HTMLElement, model: StateModel, onChange:
       root.append(row, errorSlot(`state.${i}.label`));
     });
     root.appendChild(
-      addButton("＋ Ajouter un état", () => {
+      addButton(tx("ws.state.add"), () => {
         m.states.push({ id: uid("s"), label: "" });
         render();
         emit();
@@ -65,14 +66,14 @@ export function mountStateEditor(root: HTMLElement, model: StateModel, onChange:
       }),
     );
 
-    root.appendChild(label("Transitions"));
+    root.appendChild(label(tx("ws.state.transitions")));
     m.transitions.forEach((t, i) => {
       const row = el("div", "ws-row");
-      const from = selectBox(options(), t.from, "De", (v) => {
+      const from = selectBox(options(), t.from, tx("ws.from"), (v) => {
         t.from = v;
         emit();
       });
-      const to = selectBox(options(), t.to, "Vers", (v) => {
+      const to = selectBox(options(), t.to, tx("ws.to"), (v) => {
         t.to = v;
         emit();
       });
@@ -82,7 +83,7 @@ export function mountStateEditor(root: HTMLElement, model: StateModel, onChange:
         from,
         el("span", "ws-arrow", "→"),
         to,
-        textInput(t.label, "Nom (facultatif)", (v) => {
+        textInput(t.label, tx("ws.state.transName"), (v) => {
           t.label = v;
           emit();
         }, "ws-in ws-short"),
@@ -101,7 +102,7 @@ export function mountStateEditor(root: HTMLElement, model: StateModel, onChange:
       );
       root.appendChild(row);
     });
-    const addT = addButton("＋ Ajouter une transition", () => {
+    const addT = addButton(tx("ws.state.addTransition"), () => {
       if (m.states.length === 0) return;
       const last = m.states.length - 1;
       m.transitions.push({ from: m.states[Math.max(0, last - 1)].id, to: m.states[last].id, label: "" });
@@ -111,14 +112,14 @@ export function mountStateEditor(root: HTMLElement, model: StateModel, onChange:
     addT.disabled = m.states.length === 0;
     root.appendChild(addT);
 
-    root.appendChild(label("Départ et fin"));
+    root.appendChild(label(tx("ws.state.startEnd")));
     const startRow = el("div", "ws-row");
     const startBox = el("input");
     startBox.type = "checkbox";
     startBox.checked = m.start !== null;
     startBox.disabled = m.states.length === 0;
-    startBox.setAttribute("aria-label", "Point de départ");
-    const startSel = selectBox(options(), m.start ?? m.states[0]?.id ?? "", "État de départ", (v) => {
+    startBox.setAttribute("aria-label", tx("ws.state.startAria"));
+    const startSel = selectBox(options(), m.start ?? m.states[0]?.id ?? "", tx("ws.state.startState"), (v) => {
       m.start = v;
       emit();
     });
@@ -130,11 +131,11 @@ export function mountStateEditor(root: HTMLElement, model: StateModel, onChange:
       emit();
     });
     const startLbl = el("label", "ws-check");
-    startLbl.append(startBox, document.createTextNode(" ● Point de départ vers "));
+    startLbl.append(startBox, document.createTextNode(tx("ws.state.startLabel")));
     startRow.append(startLbl, startSel);
     root.appendChild(startRow);
 
-    const endsLbl = el("div", "ws-inline-lbl", "◉ Point de fin depuis :");
+    const endsLbl = el("div", "ws-inline-lbl", tx("ws.state.endLabel"));
     root.appendChild(endsLbl);
     const ends = el("div", "ws-checks");
     m.states.forEach((s, i) => {

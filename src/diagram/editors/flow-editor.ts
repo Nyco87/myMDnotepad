@@ -1,12 +1,13 @@
+import { t as tx, type Key } from "../../i18n";
 import type { FlowModel, FlowShape } from "../model";
 import { paintErrors, validateModel } from "../validate";
 import { addButton, clone, el, errorSlot, label, moveItem, rowTools, selectBox, textInput, uid } from "./ui";
 
-const SHAPES: { value: FlowShape; label: string }[] = [
-  { value: "rect", label: "▭ Rectangle" },
-  { value: "round", label: "⬭ Arrondi" },
-  { value: "decision", label: "◇ Décision" },
-  { value: "circle", label: "○ Cercle" },
+const SHAPES: { value: FlowShape; key: Key }[] = [
+  { value: "rect", key: "ws.shape.rect" },
+  { value: "round", key: "ws.shape.round" },
+  { value: "decision", key: "ws.shape.decision" },
+  { value: "circle", key: "ws.shape.circle" },
 ];
 
 /**
@@ -19,7 +20,7 @@ export function mountFlowEditor(root: HTMLElement, model: FlowModel, onChange: (
     paintErrors(root, validateModel(m));
     onChange(clone(m));
   };
-  const name = (i: number): string => m.nodes[i].label.trim() || `(case ${i + 1})`;
+  const name = (i: number): string => m.nodes[i].label.trim() || tx("ws.flow.unnamed", { n: i + 1 });
   const nodeOptions = (): { value: string; label: string }[] => m.nodes.map((n, i) => ({ value: n.id, label: name(i) }));
   /** Réécrit le texte des listes de/vers quand un libellé change, sans reconstruire les champs en cours de saisie. */
   const refreshOptions = (): void => {
@@ -35,14 +36,14 @@ export function mountFlowEditor(root: HTMLElement, model: FlowModel, onChange: (
     root.textContent = "";
     const head = el("div", "ws-row");
     head.append(
-      el("span", "ws-inline-lbl", "Sens"),
+      el("span", "ws-inline-lbl", tx("ws.flow.direction")),
       selectBox(
         [
-          { value: "TD", label: "Haut → Bas" },
-          { value: "LR", label: "Gauche → Droite" },
+          { value: "TD", label: tx("ws.flow.dirTD") },
+          { value: "LR", label: tx("ws.flow.dirLR") },
         ],
         m.direction,
-        "Sens du schéma",
+        tx("ws.flow.dirAria"),
         (v) => {
           m.direction = v as "TD" | "LR";
           emit();
@@ -51,16 +52,16 @@ export function mountFlowEditor(root: HTMLElement, model: FlowModel, onChange: (
     );
     root.appendChild(head);
 
-    root.appendChild(label("Cases"));
+    root.appendChild(label(tx("ws.flow.nodes")));
     m.nodes.forEach((n, i) => {
       const row = el("div", "ws-row");
       row.append(
-        textInput(n.label, "Texte de la case", (v) => {
+        textInput(n.label, tx("ws.flow.nodeText"), (v) => {
           n.label = v;
           refreshOptions();
           emit();
         }),
-        selectBox(SHAPES, n.shape, "Forme", (v) => {
+        selectBox(SHAPES.map((s) => ({ value: s.value, label: tx(s.key) })), n.shape, tx("ws.flow.shape"), (v) => {
           n.shape = v as FlowShape;
           emit();
         }),
@@ -81,7 +82,7 @@ export function mountFlowEditor(root: HTMLElement, model: FlowModel, onChange: (
       root.append(row, errorSlot(`node.${i}.label`));
     });
     root.appendChild(
-      addButton("＋ Ajouter une case", () => {
+      addButton(tx("ws.flow.addNode"), () => {
         m.nodes.push({ id: uid("n"), label: "", shape: "rect" });
         render();
         emit();
@@ -89,14 +90,14 @@ export function mountFlowEditor(root: HTMLElement, model: FlowModel, onChange: (
       }),
     );
 
-    root.appendChild(label("Flèches"));
+    root.appendChild(label(tx("ws.flow.edges")));
     m.edges.forEach((e, i) => {
       const row = el("div", "ws-row");
-      const from = selectBox(nodeOptions(), e.from, "De", (v) => {
+      const from = selectBox(nodeOptions(), e.from, tx("ws.from"), (v) => {
         e.from = v;
         emit();
       });
-      const to = selectBox(nodeOptions(), e.to, "Vers", (v) => {
+      const to = selectBox(nodeOptions(), e.to, tx("ws.to"), (v) => {
         e.to = v;
         emit();
       });
@@ -106,7 +107,7 @@ export function mountFlowEditor(root: HTMLElement, model: FlowModel, onChange: (
         from,
         el("span", "ws-arrow", "→"),
         to,
-        textInput(e.label, "Texte", (v) => {
+        textInput(e.label, tx("ws.flow.edgeText"), (v) => {
           e.label = v;
           emit();
         }, "ws-in ws-short"),
@@ -125,7 +126,7 @@ export function mountFlowEditor(root: HTMLElement, model: FlowModel, onChange: (
       );
       root.appendChild(row);
     });
-    const arrow = addButton("＋ Ajouter une flèche", () => {
+    const arrow = addButton(tx("ws.flow.addEdge"), () => {
       if (m.nodes.length === 0) return;
       const last = m.nodes.length - 1;
       m.edges.push({ from: m.nodes[Math.max(0, last - 1)].id, to: m.nodes[last].id, label: "" });

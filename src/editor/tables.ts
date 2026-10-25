@@ -15,6 +15,7 @@ import {
   CellSelection,
   TableMap,
 } from "prosemirror-tables";
+import { t, tr, type Key } from "../i18n";
 import { showContextMenu, type ContextMenuItem } from "../ui/context-menu";
 
 export { pickTableSize } from "../ui/table-size-picker";
@@ -185,16 +186,16 @@ export function tableMenuItems(view: EditorView): ContextMenuItem[] {
     view.focus();
   };
   return [
-    { label: "Insérer une ligne au-dessus", action: run(addRowBeforeCmd) },
-    { label: "Insérer une ligne en dessous", action: run(addRowAfterCmd) },
-    { label: "Insérer une colonne à gauche", action: run(addColumnBeforeCmd) },
-    { label: "Insérer une colonne à droite", action: run(addColumnAfterCmd) },
-    { label: "Aligner à gauche", action: run(setColumnAlign("left")) },
-    { label: "Aligner au centre", action: run(setColumnAlign("center")) },
-    { label: "Aligner à droite", action: run(setColumnAlign("right")) },
-    { label: "Supprimer la ligne", action: run(deleteRowCmd), danger: true },
-    { label: "Supprimer la colonne", action: run(deleteColumnCmd), danger: true },
-    { label: "Supprimer le tableau", action: run(deleteTableCmd), danger: true },
+    { label: t("tbl.rowBefore"), action: run(addRowBeforeCmd) },
+    { label: t("tbl.rowAfter"), action: run(addRowAfterCmd) },
+    { label: t("tbl.colBefore"), action: run(addColumnBeforeCmd) },
+    { label: t("tbl.colAfter"), action: run(addColumnAfterCmd) },
+    { label: t("tbl.alignLeft"), action: run(setColumnAlign("left")) },
+    { label: t("tbl.alignCenter"), action: run(setColumnAlign("center")) },
+    { label: t("tbl.alignRight"), action: run(setColumnAlign("right")) },
+    { label: t("tbl.delRow"), action: run(deleteRowCmd), danger: true },
+    { label: t("tbl.delCol"), action: run(deleteColumnCmd), danger: true },
+    { label: t("tbl.delTable"), action: run(deleteTableCmd), danger: true },
   ];
 }
 
@@ -253,12 +254,11 @@ export function tableControlsPlugin(): Plugin {
           return -1;
         }
       };
-      const setup = (b: HTMLButtonElement, axis: Axis, title: string): void => {
+      const setup = (b: HTMLButtonElement, axis: Axis, title: Key): void => {
         b.type = "button";
         b.className = `tbl-add ${axis}`;
-        b.title = title;
+        tr(b, { title, aria: title });
         b.textContent = "+";
-        b.setAttribute("aria-label", title);
         b.addEventListener("mousedown", (e) => e.preventDefault()); // keep editor focus
         b.addEventListener("click", () => {
           if (!current || current.axis !== axis || !current.el.isConnected) return;
@@ -269,8 +269,8 @@ export function tableControlsPlugin(): Plugin {
           view.focus();
         });
       };
-      setup(rowBtn, "row", "Insérer une ligne ici");
-      setup(colBtn, "col", "Insérer une colonne ici");
+      setup(rowBtn, "row", "tbl.addRowHere");
+      setup(colBtn, "col", "tbl.addColHere");
       if (host) {
         if (getComputedStyle(host).position === "static") host.style.position = "relative";
         host.append(rowBtn, colBtn);

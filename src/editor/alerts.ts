@@ -2,17 +2,18 @@ import { wrapIn } from "prosemirror-commands";
 import type { Command } from "prosemirror-state";
 import type { NodeViewConstructor } from "prosemirror-view";
 import { ALERT_KINDS, type AlertKind } from "../markdown/alert-kinds";
+import { t, tr, type Key } from "../i18n";
 import { showContextMenu } from "../ui/context-menu";
 
 export type { AlertKind };
 
 /** Label, icon and fixed accent color of each GitHub alert kind. */
 export const ALERTS: Record<AlertKind, { label: string; icon: string; color: string }> = {
-  note: { label: "Note", icon: "ℹ️", color: "#4493f8" },
-  tip: { label: "Astuce", icon: "💡", color: "#3fb950" },
-  important: { label: "Important", icon: "❗", color: "#ab7df8" },
-  warning: { label: "Attention", icon: "⚠️", color: "#d29922" },
-  caution: { label: "Danger", icon: "🔴", color: "#f85149" },
+  note: { get label() { return t("alert.note"); }, icon: "ℹ️", color: "#4493f8" },
+  tip: { get label() { return t("alert.tip"); }, icon: "💡", color: "#3fb950" },
+  important: { get label() { return t("alert.important"); }, icon: "❗", color: "#ab7df8" },
+  warning: { get label() { return t("alert.warning"); }, icon: "⚠️", color: "#d29922" },
+  caution: { get label() { return t("alert.caution"); }, icon: "🔴", color: "#f85149" },
 };
 
 /** Nearest alert around the selection: its position and node. */
@@ -57,7 +58,7 @@ export const alertView: NodeViewConstructor = (initial, view, getPos) => {
   title.className = "alert-title";
   title.contentEditable = "false";
   title.setAttribute("role", "button");
-  title.title = "Changer le type d'alerte";
+  tr(title, { title: "alert.change" });
   const icon = document.createElement("span");
   icon.className = "alert-icon";
   const label = document.createElement("span");
@@ -73,7 +74,7 @@ export const alertView: NodeViewConstructor = (initial, view, getPos) => {
     dom.className = `alert alert-${kind}`;
     dom.setAttribute("data-alert", kind);
     icon.textContent = info.icon;
-    label.textContent = info.label;
+    tr(label, { text: `alert.${kind}` as Key });
   };
   sync();
 

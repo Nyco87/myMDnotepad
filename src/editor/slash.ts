@@ -1,6 +1,6 @@
 import { Plugin, TextSelection, type EditorState } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
-import type { SlashCommand, SlashGroup } from "./slash-commands";
+import { groupLabel, type SlashCommand, type SlashGroup } from "./slash-commands";
 
 export type { SlashCommand };
 
@@ -146,7 +146,7 @@ export function slashMenuPlugin(getCommands: () => SlashCommand[]): Plugin {
         group = cmd.group;
         const g = document.createElement("div");
         g.className = "slash-group";
-        g.textContent = cmd.group;
+        g.textContent = groupLabel(cmd.group);
         el!.appendChild(g);
       }
       const row = document.createElement("div");

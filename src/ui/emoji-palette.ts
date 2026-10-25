@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { EMOJI_GROUPS } from "./emoji-data";
 
 /** Puts `e` first, removes duplicates, keeps at most `max` entries. Returns a new array. */
@@ -14,7 +15,7 @@ export function openEmojiPalette(anchor: HTMLElement, recents: string[], onPick:
   const pop = document.createElement("div");
   pop.className = "emoji-palette";
 
-  const groups = recents.length > 0 ? [{ label: "Récents", emojis: recents }, ...EMOJI_GROUPS] : EMOJI_GROUPS;
+  const groups = recents.length > 0 ? [{ label: t("emoji.recent"), emojis: recents }, ...EMOJI_GROUPS] : EMOJI_GROUPS;
   for (const g of groups) {
     const label = document.createElement("div");
     label.className = "emoji-label";

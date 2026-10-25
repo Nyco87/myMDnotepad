@@ -15,6 +15,7 @@ export default defineConfig(() => ({
   // Unit tests run in Node by default; DOM tests opt in with `// @vitest-environment jsdom`.
   test: {
     environment: "node",
+    setupFiles: ["src/test-support/setup.ts"],
   },
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {

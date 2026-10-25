@@ -4,6 +4,7 @@ import type { EditorState, Command } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { isInTable } from "prosemirror-tables";
 import { getSettings, saveSettings } from "../api";
+import { onLanguageChanged, t, tr, type Key } from "../i18n";
 import {
   indentListItem,
   outdentListItem,
@@ -106,7 +107,7 @@ function openLinkPopover(anchor: HTMLElement, initial: string, onDone: (href: st
   input.type = "text";
   input.placeholder = "https://…";
   input.value = initial;
-  input.setAttribute("aria-label", "Adresse du lien");
+  tr(input, { aria: "toolbar.linkAddress" });
   pop.appendChild(input);
 
   const close = (): void => {
@@ -146,7 +147,9 @@ function openLinkPopover(anchor: HTMLElement, initial: string, onDone: (href: st
 interface ButtonDef {
   id: string;
   label: string;
-  title: string;
+  /** Clé de traduction du libellé (sinon `label` tel quel). */
+  labelKey?: Key;
+  title: Key;
   className?: string;
   active?: (s: EditorState) => boolean;
   /** Custom label content (e.g. an element); defaults to the text `label`. */
@@ -176,7 +179,7 @@ export function mountToolbar(
 ): ToolbarHandle {
   el.classList.add("toolbar");
   el.setAttribute("role", "toolbar");
-  el.setAttribute("aria-label", "Mise en forme");
+  tr(el, { aria: "toolbar.aria" });
   el.textContent = "";
 
   const inNode = (name: string) => (s: EditorState) => insideNode(s, name);
@@ -192,19 +195,19 @@ export function mountToolbar(
   const groups: ButtonDef[][] = [
     [], // the heading dropdown goes here
     [
-      { id: "bold", label: "G", title: "Gras (Ctrl+B)", className: "b-bold", active: (s) => markActive(s, "strong"), command: () => toggleMark("strong") },
-      { id: "italic", label: "I", title: "Italique (Ctrl+I)", className: "b-italic", active: (s) => markActive(s, "em"), command: () => toggleMark("em") },
-      { id: "strike", label: "S", title: "Barré (Ctrl+Shift+X)", className: "b-strike", labelEl: () => {
+      { id: "bold", label: "G", labelKey: "toolbar.boldLabel", title: "toolbar.bold", className: "b-bold", active: (s) => markActive(s, "strong"), command: () => toggleMark("strong") },
+      { id: "italic", label: "I", title: "toolbar.italic", className: "b-italic", active: (s) => markActive(s, "em"), command: () => toggleMark("em") },
+      { id: "strike", label: "S", title: "toolbar.strike", className: "b-strike", labelEl: () => {
         const s = document.createElement("s");
         s.textContent = "S";
         return s;
       }, active: (s) => markActive(s, "strike"), command: () => toggleMark("strike") },
-      { id: "highlight", label: "A", title: "Surligner (Ctrl+Shift+H)", className: "b-highlight", active: (s) => markActive(s, "highlight"), command: () => toggleMark("highlight") },
-      { id: "code", label: "</>", title: "Code en ligne (Ctrl+E)", className: "b-code", active: (s) => markActive(s, "code"), command: () => toggleMark("code") },
+      { id: "highlight", label: "A", title: "toolbar.highlight", className: "b-highlight", active: (s) => markActive(s, "highlight"), command: () => toggleMark("highlight") },
+      { id: "code", label: "</>", title: "toolbar.code", className: "b-code", active: (s) => markActive(s, "code"), command: () => toggleMark("code") },
       {
         id: "emoji",
         label: "Ω",
-        title: "Symboles",
+        title: "toolbar.symbols",
         popup: ".emoji-palette",
         run: async (btn, view) => {
           const settings = await getSettings();
@@ -222,18 +225,19 @@ export function mountToolbar(
       },
     ],
     [
-      { id: "bullet", label: "•≡", title: "Liste à puces", active: inNode("bullet_list"), command: toggleBlock("bullet_list") },
-      { id: "ordered", label: "1≡", title: "Liste numérotée", active: inNode("ordered_list"), command: toggleBlock("ordered_list") },
-      { id: "task", label: "☑", title: "Liste de tâches (Ctrl+Entrée pour cocher)", active: inNode("task_list"), command: toggleBlock("task_list") },
-      { id: "indent", label: "⇥", title: "Augmenter le retrait (Tab)", enabled: (s) => indentListItem(s), command: () => indentListItem },
-      { id: "outdent", label: "⇤", title: "Réduire le retrait (Maj+Tab)", enabled: (s) => outdentListItem(s), command: () => outdentListItem },
+      { id: "bullet", label: "•≡", title: "toolbar.bullet", active: inNode("bullet_list"), command: toggleBlock("bullet_list") },
+      { id: "ordered", label: "1≡", title: "toolbar.ordered", active: inNode("ordered_list"), command: toggleBlock("ordered_list") },
+      { id: "task", label: "☑", title: "toolbar.task", active: inNode("task_list"), command: toggleBlock("task_list") },
+      { id: "indent", label: "⇥", title: "toolbar.indent", enabled: (s) => indentListItem(s), command: () => indentListItem },
+      { id: "outdent", label: "⇤", title: "toolbar.outdent", enabled: (s) => outdentListItem(s), command: () => outdentListItem },
     ],
     [
-      { id: "quote", label: "❝", title: "Citation", active: inNode("blockquote"), command: toggleBlock("blockquote") },
+      { id: "quote", label: "❝", title: "toolbar.quote", active: inNode("blockquote"), command: toggleBlock("blockquote") },
       {
         id: "alert",
         label: "Alerte ▾",
-        title: "Alerte (Note, Astuce, Important, Attention, Danger)",
+        labelKey: "toolbar.alertLabel",
+        title: "toolbar.alert",
         className: "tb-alert",
         active: inNode("alert"),
         popup: ".ctx-menu",
@@ -258,14 +262,14 @@ export function mountToolbar(
       {
         id: "codeblock",
         label: "{ }",
-        title: "Bloc de code",
+        title: "toolbar.codeblock",
         active: (s) => s.selection.$from.parent.type.name === "code_block",
         command: (s) => (s.selection.$from.parent.type.name === "code_block" ? setHeading(0) : insertCodeBlock()),
       },
       {
         id: "table",
         label: "⊞",
-        title: "Tableau",
+        title: "toolbar.table",
         active: (s) => isInTable(s),
         popup: ".size-picker",
         run: async (btn, view) => {
@@ -279,7 +283,7 @@ export function mountToolbar(
       {
         id: "link",
         label: "🔗",
-        title: "Lien",
+        title: "toolbar.link",
         active: (s) => markActive(s, "link"),
         popup: ".link-pop",
         run: (btn, view) => {
@@ -309,23 +313,23 @@ export function mountToolbar(
       {
         id: "image",
         label: "🖼",
-        title: "Image",
+        title: "toolbar.image",
         run: async (_btn, view) => {
           try {
             await pickAndInsertImage(view, getNoteRel());
           } catch (err) {
-            onError(`Insertion de l'image impossible : ${String(err)}`);
+            onError(t("toolbar.imageFailed", { err: String(err) }));
           }
           if (!view.isDestroyed) view.focus();
         },
       },
-      { id: "hr", label: "―", title: "Ligne horizontale", command: () => insertHorizontalRule() },
+      { id: "hr", label: "―", title: "toolbar.hr", command: () => insertHorizontalRule() },
     ],
     [
       {
         id: "diagram",
         label: "🔀",
-        title: "Schéma",
+        title: "toolbar.diagram",
         run: (_btn, view) => createDiagram(view, onError),
       },
     ],
@@ -357,9 +361,9 @@ export function mountToolbar(
     btn.className = "tb-btn" + (def.className ? ` ${def.className}` : "");
     btn.dataset.id = def.id;
     if (def.labelEl) btn.appendChild(def.labelEl());
+    else if (def.labelKey) tr(btn, { text: def.labelKey });
     else btn.textContent = def.label;
-    btn.title = def.title;
-    btn.setAttribute("aria-label", def.title);
+    tr(btn, { title: def.title, aria: def.title });
     btn.addEventListener("mousedown", (e) => e.preventDefault()); // never steal focus from the editor
     if (def.popup) trackPopup(btn, def.popup);
     const act = (anchor: HTMLElement): void => {
@@ -387,8 +391,7 @@ export function mountToolbar(
   headingBtn.type = "button";
   headingBtn.className = "tb-btn tb-heading";
   headingBtn.dataset.id = "heading";
-  headingBtn.title = "Style de titre (Ctrl+1 à Ctrl+6, Ctrl+0 pour un paragraphe)";
-  headingBtn.setAttribute("aria-label", "Style de titre");
+  tr(headingBtn, { title: "toolbar.headingTitle", aria: "toolbar.headingAria" });
   headingBtn.setAttribute("aria-haspopup", "menu");
   headingBtn.addEventListener("mousedown", (e) => e.preventDefault());
   trackPopup(headingBtn, ".ctx-menu");
@@ -401,7 +404,7 @@ export function mountToolbar(
       r.left,
       r.bottom + 4,
       levels.map((l) => ({
-        label: l === 0 ? "Paragraphe (Ctrl+0)" : `Titre ${l} (Ctrl+${l})`,
+        label: l === 0 ? t("toolbar.paragraphMenu") : t("toolbar.headingMenu", { n: l }),
         action: () => {
           if (view.isDestroyed) return;
           setHeading(l)(view.state, view.dispatch);
@@ -432,13 +435,14 @@ export function mountToolbar(
       if (def.enabled) btn.disabled = !state || !def.enabled(state);
     }
     const level = state ? headingLevel(state) : 0;
-    headingBtn.textContent = (level > 0 ? `Titre ${level}` : "Paragraphe") + " ▾";
+    headingBtn.textContent = (level > 0 ? t("toolbar.heading", { n: level }) : t("toolbar.paragraph")) + " ▾";
     headingBtn.classList.toggle("active", level > 0);
   }
 
   document.addEventListener("selectionchange", refresh);
   refresh();
   disposers.push(() => document.removeEventListener("selectionchange", refresh));
+  disposers.push(onLanguageChanged(refresh));
   return {
     refresh,
     invoke(id, anchor) {

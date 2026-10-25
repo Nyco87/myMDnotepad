@@ -1,5 +1,6 @@
 import { keymap } from "prosemirror-keymap";
 import { Plugin } from "prosemirror-state";
+import { t } from "../i18n";
 
 /** Où va un lien cliqué : navigateur par défaut, autre note du dossier, ou nulle part. */
 export type LinkTarget =
@@ -61,7 +62,6 @@ export interface LinkContext {
  * Ctrl+clic sur un lien : l'ouvre. Un clic simple garde son rôle (placer le curseur). `get` est lu à chaque
  * événement (le chemin de la note peut changer ; sans gestionnaires rien ne s'ouvre).
  */
-export const LINK_TIP = "Ctrl+clic pour ouvrir";
 
 export function linkOpenPlugin(get: () => LinkContext): Plugin {
   // Tooltip: a floating element, never an attribute of the document DOM (it would leak into copy/paste).
@@ -80,7 +80,7 @@ export function linkOpenPlugin(get: () => LinkContext): Plugin {
           if (!tip) {
             tip = document.createElement("div");
             tip.className = "link-tip";
-            tip.textContent = LINK_TIP;
+            tip.textContent = t("links.tip");
             document.body.appendChild(tip);
           }
           const r = a.getBoundingClientRect();

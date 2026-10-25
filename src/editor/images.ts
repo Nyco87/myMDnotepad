@@ -1,6 +1,7 @@
 import { Plugin, type Command } from "prosemirror-state";
 import type { EditorView, NodeViewConstructor } from "prosemirror-view";
 import { importImage, resolveAsset, saveImage } from "../api";
+import { t } from "../i18n";
 
 const SCHEME = /^[a-z][a-z0-9+.-]+:/i; // http:, https:, data:, file:… (2+ letters, so "C:\" is not a scheme)
 
@@ -108,7 +109,7 @@ export function imagePastePlugin(noteRel: () => string, onError?: (message: stri
               if (view.isDestroyed) return;
               insertImage(link)(view.state, view.dispatch);
             } catch (err) {
-              (onError ?? console.error)(`Collage de l'image impossible : ${String(err)}`);
+              (onError ?? console.error)(t("images.pasteFailed", { err: String(err) }));
             }
           }
         })();

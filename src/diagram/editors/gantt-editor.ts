@@ -1,3 +1,4 @@
+import { t as tx } from "../../i18n";
 import type { GanttModel, GanttTask } from "../model";
 import { paintErrors, validateModel } from "../validate";
 import { addButton, clone, el, errorSlot, label, moveItem, rowTools, selectBox, textInput, uid } from "./ui";
@@ -15,7 +16,7 @@ export function mountGanttEditor(root: HTMLElement, model: GanttModel, onChange:
     onChange(clone(m));
   };
   const allTasks = (): GanttTask[] => m.sections.flatMap((s) => s.tasks);
-  const taskName = (t: GanttTask, i: number): string => t.name.trim() || `(tâche ${i + 1})`;
+  const taskName = (t: GanttTask, i: number): string => t.name.trim() || tx("ws.gantt.unnamed", { n: i + 1 });
   const refreshNames = (): void => {
     const tasks = allTasks();
     root.querySelectorAll<HTMLSelectElement>("select.ws-task-sel").forEach((select) => {
@@ -36,22 +37,22 @@ export function mountGanttEditor(root: HTMLElement, model: GanttModel, onChange:
 
   const render = (): void => {
     root.textContent = "";
-    root.appendChild(label("Titre"));
+    root.appendChild(label(tx("ws.titleLabel")));
     root.appendChild(
-      textInput(m.title, "Titre du planning (facultatif)", (v) => {
+      textInput(m.title, tx("ws.gantt.titlePh"), (v) => {
         m.title = v;
         emit();
       }),
     );
     root.appendChild(errorSlot("title"));
-    root.appendChild(el("div", "ws-hint", "Format des dates : AAAA-MM-JJ"));
+    root.appendChild(el("div", "ws-hint", tx("ws.gantt.dateHint")));
 
     let n = 0;
     m.sections.forEach((section, si) => {
       const box = el("div", "ws-section");
       const head = el("div", "ws-row");
       head.append(
-        textInput(section.name, "Nom de la section", (v) => {
+        textInput(section.name, tx("ws.gantt.sectionName"), (v) => {
           section.name = v;
           emit();
         }, "ws-in ws-section-name"),
@@ -78,24 +79,24 @@ export function mountGanttEditor(root: HTMLElement, model: GanttModel, onChange:
         const afterSel = selectBox(
           others.map((o) => ({ value: o.id, label: taskName(o, allTasks().indexOf(o)) })),
           "after" in t.start ? t.start.after : (others[0]?.id ?? ""),
-          "Après la tâche",
+          tx("ws.gantt.afterTask"),
           (v) => {
             t.start = { after: v };
             emit();
           },
         );
         afterSel.classList.add("ws-task-sel");
-        const dateIn = textInput("date" in t.start ? t.start.date : "", "AAAA-MM-JJ", (v) => {
+        const dateIn = textInput("date" in t.start ? t.start.date : "", tx("ws.gantt.datePh"), (v) => {
           t.start = { date: v.trim() };
           emit();
         }, "ws-in ws-date");
         const kind = selectBox(
           [
-            { value: "date", label: "Le" },
-            { value: "after", label: "Après" },
+            { value: "date", label: tx("ws.gantt.on") },
+            { value: "after", label: tx("ws.gantt.after") },
           ],
           "date" in t.start ? "date" : "after",
-          "Type de début",
+          tx("ws.gantt.startType"),
           (v) => {
             if (v === "after") {
               if (others.length === 0) {
@@ -109,18 +110,18 @@ export function mountGanttEditor(root: HTMLElement, model: GanttModel, onChange:
           },
         );
         row.append(
-          textInput(t.name, "Nom de la tâche", (v) => {
+          textInput(t.name, tx("ws.gantt.taskName"), (v) => {
             t.name = v;
             refreshNames();
             emit();
           }, "ws-in ws-task-name"),
           kind,
           "date" in t.start ? dateIn : afterSel,
-          textInput(String(t.days), "Jours", (v) => {
+          textInput(String(t.days), tx("ws.gantt.days"), (v) => {
             t.days = v.trim() === "" ? NaN : Number(v);
             emit();
           }, "ws-in ws-num"),
-          el("span", "ws-inline-lbl", "j"),
+          el("span", "ws-inline-lbl", tx("ws.gantt.daysUnit")),
           rowTools(ti, section.tasks.length, {
             move(dir) {
               moveItem(section.tasks, ti, dir);
@@ -139,7 +140,7 @@ export function mountGanttEditor(root: HTMLElement, model: GanttModel, onChange:
         box.append(row, errs);
       });
       box.appendChild(
-        addButton("＋ Ajouter une tâche", () => {
+        addButton(tx("ws.gantt.addTask"), () => {
           const previous = allTasks().pop();
           section.tasks.push({
             id: uid("t"),
@@ -157,8 +158,8 @@ export function mountGanttEditor(root: HTMLElement, model: GanttModel, onChange:
     });
 
     root.appendChild(
-      addButton("＋ Ajouter une section", () => {
-        m.sections.push({ name: `Section ${m.sections.length + 1}`, tasks: [] });
+      addButton(tx("ws.gantt.addSection"), () => {
+        m.sections.push({ name: tx("ws.gantt.sectionDefault", { n: m.sections.length + 1 }), tasks: [] });
         render();
         emit();
       }),

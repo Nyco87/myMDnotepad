@@ -1,6 +1,7 @@
 import { DOMSerializer, type Node as PMNode } from "prosemirror-model";
 import type { NodeView, NodeViewConstructor } from "prosemirror-view";
 import { diagramAccent, renderMermaid, type RenderResult } from "../diagram/render";
+import { t, tr } from "../i18n";
 
 /** Called when a diagram is clicked: position of its node and its mermaid code. */
 export type EditDiagram = (pos: number, code: string) => void;
@@ -75,7 +76,7 @@ function mermaidView(initial: PMNode, getPos: () => number | undefined, onEdit: 
   dom.className = "diagram";
   dom.contentEditable = "false";
   dom.setAttribute("role", "button");
-  dom.title = "Modifier le schéma";
+  tr(dom, { title: "diagram.edit" });
 
   const show = (result: RenderResult, code: string): void => {
     dom.classList.remove("diagram-pending");
@@ -103,7 +104,7 @@ function mermaidView(initial: PMNode, getPos: () => number | undefined, onEdit: 
     shown = code;
     const mine = ++generation;
     if (code.trim() === "") {
-      show({ ok: false, error: "Schéma vide : cliquez pour le créer." }, "");
+      show({ ok: false, error: t("diagram.empty") }, "");
       return;
     }
     dom.classList.add("diagram-pending");

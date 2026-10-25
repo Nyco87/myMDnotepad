@@ -1,4 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { tr, type Key } from "../i18n";
 
 export interface TabView {
   rel: string;
@@ -38,7 +39,7 @@ export function mountTitlebar(el: HTMLElement, h: TitlebarHandlers): TitlebarHan
   newBtn.type = "button";
   newBtn.className = "tab-new";
   newBtn.textContent = "＋";
-  newBtn.title = "Nouvelle note (Ctrl+N)";
+  tr(newBtn, { title: "titlebar.newNote" });
   newBtn.addEventListener("click", () => h.onNew());
 
   const drag = document.createElement("div");
@@ -49,27 +50,25 @@ export function mountTitlebar(el: HTMLElement, h: TitlebarHandlers): TitlebarHan
   menuBtn.type = "button";
   menuBtn.className = "titlebar-menu";
   menuBtn.textContent = "⋯";
-  menuBtn.title = "Menu";
-  menuBtn.setAttribute("aria-label", "Menu");
+  tr(menuBtn, { title: "titlebar.menu", aria: "titlebar.menu" });
   menuBtn.setAttribute("aria-haspopup", "menu");
   menuBtn.addEventListener("click", () => h.onMenu?.(menuBtn.getBoundingClientRect()));
 
   const ctl = document.createElement("div");
   ctl.className = "win-ctl";
-  const winBtn = (label: string, title: string, cls: string, act: () => Promise<void>): HTMLButtonElement => {
+  const winBtn = (label: string, title: Key, cls: string, act: () => Promise<void>): HTMLButtonElement => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = `win-btn ${cls}`;
     b.textContent = label;
-    b.title = title;
-    b.setAttribute("aria-label", title);
+    tr(b, { title, aria: title });
     b.addEventListener("click", () => void act().catch((e) => console.error(e)));
     return b;
   };
   ctl.append(
-    winBtn("─", "Réduire", "win-min", () => getCurrentWindow().minimize()),
-    winBtn("☐", "Agrandir", "win-max", () => getCurrentWindow().toggleMaximize()),
-    winBtn("✕", "Fermer", "win-close", () => getCurrentWindow().close()),
+    winBtn("─", "titlebar.minimize", "win-min", () => getCurrentWindow().minimize()),
+    winBtn("☐", "titlebar.maximize", "win-max", () => getCurrentWindow().toggleMaximize()),
+    winBtn("✕", "common.close", "win-close", () => getCurrentWindow().close()),
   );
 
   el.append(strip, drag, menuBtn, ctl);
@@ -80,7 +79,8 @@ export function mountTitlebar(el: HTMLElement, h: TitlebarHandlers): TitlebarHan
     tab.setAttribute("role", "tab");
     tab.setAttribute("aria-selected", String(t.active));
     tab.dataset.rel = t.rel;
-    tab.title = t.missing ? "Fichier introuvable sur le disque" : t.rel;
+    if (t.missing) tr(tab, { title: "titlebar.missing" });
+    else tab.title = t.rel;
 
     const label = document.createElement("span");
     label.className = "tab-label";
@@ -90,8 +90,7 @@ export function mountTitlebar(el: HTMLElement, h: TitlebarHandlers): TitlebarHan
     close.type = "button";
     close.className = "tab-close";
     close.textContent = "✕";
-    close.title = "Fermer (Ctrl+W)";
-    close.setAttribute("aria-label", `Fermer ${t.title}`);
+    tr(close, { title: "titlebar.closeTab", aria: "titlebar.closeNamed" }, { title: t.title });
     close.addEventListener("click", (e) => {
       e.stopPropagation();
       h.onClose(t.rel);

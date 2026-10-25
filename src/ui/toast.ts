@@ -1,3 +1,5 @@
+import { tr } from "../i18n";
+
 const TOAST_MS = 5000;
 
 export interface ToastOptions {
@@ -48,7 +50,7 @@ export function mountToast(parent: HTMLElement = document.body): Toast {
       const s = document.createElement("div");
       s.className = "toast toast-sticky";
       s.setAttribute("role", "status");
-      s.title = "Cliquer pour fermer";
+      tr(s, { title: "toast.clickToClose" });
       s.textContent = message;
       s.addEventListener("click", () => {
         s.remove();

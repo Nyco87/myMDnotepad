@@ -1,6 +1,7 @@
 import { Fragment, type NodeType } from "prosemirror-model";
 import { Selection, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
+import { t } from "../i18n";
 import type { WorkshopOptions } from "./workshop";
 
 /** Ouvre l'atelier (chargé à la demande : il n'est pas sur le chemin critique du démarrage). */
@@ -100,13 +101,13 @@ export async function editDiagramAt(
   try {
     result = await open({ code });
   } catch (e) {
-    notify(`L'atelier de schémas n'a pas pu s'ouvrir : ${e instanceof Error ? e.message : String(e)}`);
+    notify(t("ws.openFailed", { err: e instanceof Error ? e.message : String(e) }));
     return;
   }
   if (result === null || result === code || view.isDestroyed) return;
   const at = locate(view, pos, code);
   if (at < 0) {
-    notify("Le schéma a changé entre-temps : votre modification n'a pas été appliquée.");
+    notify(t("ws.changed"));
     return;
   }
   replaceDiagramCode(view, at, result);
@@ -119,7 +120,7 @@ export async function createDiagram(view: EditorView, notify: (message: string) 
   try {
     result = await open({});
   } catch (e) {
-    notify(`L'atelier de schémas n'a pas pu s'ouvrir : ${e instanceof Error ? e.message : String(e)}`);
+    notify(t("ws.openFailed", { err: e instanceof Error ? e.message : String(e) }));
     return;
   }
   if (result === null || view.isDestroyed) return;

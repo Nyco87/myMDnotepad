@@ -1,6 +1,7 @@
 import { Schema, type NodeSpec, type MarkSpec } from "prosemirror-model";
 import { tableNodes } from "prosemirror-tables";
 import { alertKindOf } from "./alert-kinds";
+import { tIn } from "../i18n";
 
 /**
  * Document schema shared by the editor, the markdown parser and the serializer.
@@ -259,7 +260,7 @@ export const marks: Record<string, MarkSpec> = {
           const el = dom as HTMLElement;
           const title = el.getAttribute("title");
           // Old/pasted HTML may carry the editor tooltip: it is never a real title.
-          return { href: el.getAttribute("href"), title: title === "Ctrl+clic pour ouvrir" ? null : title };
+          return { href: el.getAttribute("href"), title: title === tIn("fr", "links.tip") || title === tIn("en", "links.tip") ? null : title };
         },
       },
     ],

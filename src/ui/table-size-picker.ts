@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 const N = 8;
 
 /** 8x8 grid popover under `anchor`. Resolves {rows, cols} on click, null on Escape / outside click. */
@@ -9,11 +11,11 @@ export function pickTableSize(anchor: HTMLElement): Promise<{ rows: number; cols
     grid.className = "size-grid";
     const label = document.createElement("div");
     label.className = "size-label";
-    label.textContent = "Tableau";
+    label.textContent = t("toolbar.table");
     const cells: HTMLElement[] = [];
     const paint = (rows: number, cols: number): void => {
       cells.forEach((c, i) => c.classList.toggle("on", Math.floor(i / N) < rows && i % N < cols));
-      label.textContent = rows > 0 ? `${rows} × ${cols}` : "Tableau";
+      label.textContent = rows > 0 ? `${rows} × ${cols}` : t("toolbar.table");
     };
     const done = (value: { rows: number; cols: number } | null): void => {
       document.removeEventListener("mousedown", onOutside, true);

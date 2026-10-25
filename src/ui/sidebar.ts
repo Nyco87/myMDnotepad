@@ -1,5 +1,6 @@
 import * as api from "../api";
 import type { TreeNode } from "../api";
+import { errorText, onLanguageChanged, t, tr } from "../i18n";
 import { confirmDialog } from "./confirm-dialog";
 import { showContextMenu } from "./context-menu";
 
@@ -38,8 +39,6 @@ export interface SidebarHandle {
   selectedDir(): string;
 }
 
-const DEFAULT_NOTE = "Nouvelle note";
-const DEFAULT_FOLDER = "Nouveau dossier";
 const ERROR_MS = 4000;
 
 type Editing = {
@@ -61,7 +60,6 @@ const baseOf = (rel: string): string => {
   const last = rel.slice(rel.lastIndexOf("/") + 1);
   return last.replace(/\.md$/i, "");
 };
-const errText = (e: unknown): string => (typeof e === "string" ? e : e instanceof Error ? e.message : String(e));
 
 export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): SidebarHandle {
   el.classList.add("sidebar");
@@ -71,7 +69,7 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
   newBtn.type = "button";
   newBtn.className = "sb-new";
   const newLabel = document.createElement("span");
-  newLabel.textContent = "＋ Nouvelle note";
+  tr(newLabel, { text: "sidebar.newNote" });
   const newHint = document.createElement("span");
   newHint.className = "sb-new-hint";
   newHint.textContent = "Ctrl+N";
@@ -142,7 +140,7 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
       if (children.length === 0) {
         const empty = document.createElement("div");
         empty.className = "sb-empty";
-        empty.textContent = "Aucune note";
+        empty.textContent = t("sidebar.empty");
         treeEl.appendChild(empty);
         return;
       }
@@ -289,7 +287,7 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
     try {
       tree = await api.listTree();
     } catch (e) {
-      showError(errText(e));
+      showError(errorText(e));
       return;
     }
     kinds.clear();
@@ -378,11 +376,11 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
       if (editing === ed) {
         if (fromBlur) {
           editing = null;
-          showError(errText(e));
+          showError(errorText(e));
           render();
           void refresh();
         } else {
-          ed.error = errText(e);
+          ed.error = errorText(e);
           render();
         }
       }
@@ -400,9 +398,9 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
   const createIn = async (dir: string, kind: "note" | "folder"): Promise<void> => {
     let path: string;
     try {
-      path = kind === "note" ? await api.createNote(dir, DEFAULT_NOTE) : await api.createFolder(dir, DEFAULT_FOLDER);
+      path = kind === "note" ? await api.createNote(dir, t("sidebar.defaultNote")) : await api.createFolder(dir, t("sidebar.defaultFolder"));
     } catch (e) {
-      showError(errText(e));
+      showError(errorText(e));
       await refresh();
       return;
     }
@@ -418,7 +416,7 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
 
   const trash = async (rel: string): Promise<void> => {
     const name = baseOf(rel);
-    const ok = await confirmDialog(`Envoyer "${name}" à la Corbeille ?`);
+    const ok = await confirmDialog(t("sidebar.trashConfirm", { name }));
     if (!ok) return;
     try {
       await mutate(
@@ -427,7 +425,7 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
         () => handlers.onDeleted(rel),
       );
     } catch (e) {
-      showError(errText(e));
+      showError(errorText(e));
       await refresh();
       return;
     }
@@ -464,7 +462,7 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
       if (expanded.delete(src)) expanded.add(newPath);
       await refresh();
     } catch (err) {
-      showError(errText(err));
+      showError(errorText(err));
       await refresh();
     }
   };
@@ -472,10 +470,10 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
   const rowMenu = (n: TreeNode) => {
     const dir = n.kind === "folder" ? n.path : parentOf(n.path);
     return [
-      { label: "Nouvelle note ici", action: () => void createIn(dir, "note") },
-      { label: "Nouveau dossier", action: () => void createIn(dir, "folder") },
-      { label: "Renommer", action: () => startEdit(n.path, false) },
-      { label: "Supprimer", danger: true, action: () => void trash(n.path) },
+      { label: t("sidebar.newHere"), action: () => void createIn(dir, "note") },
+      { label: t("sidebar.newFolder"), action: () => void createIn(dir, "folder") },
+      { label: t("sidebar.rename"), action: () => startEdit(n.path, false) },
+      { label: t("sidebar.delete"), danger: true, action: () => void trash(n.path) },
     ];
   };
 
@@ -486,8 +484,8 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
   treeEl.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     showContextMenu(e.clientX, e.clientY, [
-      { label: "Nouvelle note ici", action: () => void createIn("", "note") },
-      { label: "Nouveau dossier", action: () => void createIn("", "folder") },
+      { label: t("sidebar.newHere"), action: () => void createIn("", "note") },
+      { label: t("sidebar.newFolder"), action: () => void createIn("", "folder") },
     ]);
   });
   treeEl.addEventListener("keydown", (e) => {
@@ -526,6 +524,9 @@ export function mountSidebar(el: HTMLElement, handlers: SidebarHandlers): Sideba
     },
   };
 
+  onLanguageChanged(() => {
+    if (!editing) render();
+  });
   void api.onFsChanged(() => void refresh()).catch(() => {});
   return handle;
 }

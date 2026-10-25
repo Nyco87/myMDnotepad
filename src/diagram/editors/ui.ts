@@ -1,4 +1,5 @@
 /** Petits éléments d'interface partagés par les éditeurs de briques. */
+import { t as tx } from "../../i18n";
 
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text = ""): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -61,11 +62,11 @@ export function label(text: string): HTMLElement {
 /** Boutons ↑ ↓ ✕ d'une ligne de liste. */
 export function rowTools(index: number, count: number, ops: { move(dir: -1 | 1): void; remove(): void }): HTMLElement {
   const box = el("span", "ws-tools");
-  const up = button("↑", "Monter", () => ops.move(-1));
-  const down = button("↓", "Descendre", () => ops.move(1));
+  const up = button("↑", tx("ws.up"), () => ops.move(-1));
+  const down = button("↓", tx("ws.down"), () => ops.move(1));
   up.disabled = index === 0;
   down.disabled = index === count - 1;
-  box.append(up, down, button("✕", "Supprimer", ops.remove, "ws-ib ws-del"));
+  box.append(up, down, button("✕", tx("ws.remove"), ops.remove, "ws-ib ws-del"));
   return box;
 }
 

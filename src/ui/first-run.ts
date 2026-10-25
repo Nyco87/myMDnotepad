@@ -1,7 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { setRoot } from "../api";
-
-const errText = (e: unknown): string => (typeof e === "string" ? e : e instanceof Error ? e.message : String(e));
+import { errorText, tr } from "../i18n";
 
 /**
  * Écran de premier lancement (ou de dossier introuvable). La promesse se résout après un `setRoot` réussi ;
@@ -14,20 +13,20 @@ export function showFirstRun(el: HTMLElement, reason: "unset" | "missing", previ
   box.className = "first-run";
 
   const title = document.createElement("h1");
-  title.textContent = "Choisis le dossier de tes notes";
+  tr(title, { text: "firstRun.title" });
   box.appendChild(title);
 
   if (reason === "missing") {
     const missing = document.createElement("p");
     missing.className = "first-run-missing";
-    missing.textContent = `Le dossier ${previous ?? ""} est introuvable.`;
+    tr(missing, { text: "firstRun.missing" }, { path: previous ?? "" });
     box.appendChild(missing);
   }
 
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "first-run-btn";
-  btn.textContent = "Choisir un dossier…";
+  tr(btn, { text: "firstRun.choose" });
   box.appendChild(btn);
 
   const error = document.createElement("p");
@@ -38,7 +37,7 @@ export function showFirstRun(el: HTMLElement, reason: "unset" | "missing", previ
 
   const tip = document.createElement("p");
   tip.className = "first-run-tip";
-  tip.textContent = "Astuce : un dossier OneDrive synchronise tes notes automatiquement.";
+  tr(tip, { text: "firstRun.tip" });
   box.appendChild(tip);
 
   el.appendChild(box);
@@ -56,7 +55,7 @@ export function showFirstRun(el: HTMLElement, reason: "unset" | "missing", previ
           el.textContent = "";
           resolve();
         } catch (e) {
-          error.textContent = errText(e);
+          error.textContent = errorText(e);
           error.hidden = false;
         } finally {
           btn.disabled = false;

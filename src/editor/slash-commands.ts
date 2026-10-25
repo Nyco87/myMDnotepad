@@ -3,11 +3,21 @@ import type { EditorView } from "prosemirror-view";
 import { ALERTS, insertAlert } from "./alerts";
 import { insertCodeBlock, insertHorizontalRule, setHeading, wrapIn } from "./keymap";
 import { ALERT_KINDS } from "../markdown/alert-kinds";
+import { t, tIn, type Key } from "../i18n";
 
+/** Identifiants des groupes (pas des textes affichés : voir `groupLabel`). */
 export type SlashGroup = "Blocs" | "Alertes" | "Insérer";
+
+export const groupLabel = (g: SlashGroup): string => t(`slash.group.${g}` as Key);
+
+/** Mots-clés d'une commande dans les DEUX langues (la recherche marche quelle que soit la langue de l'interface). */
+const keywordsOf = (key: Key): string[] => [
+  ...new Set([...tIn("fr", key).split(","), ...tIn("en", key).split(",")].filter(Boolean)),
+];
 
 export interface SlashCommand {
   id: string;
+  /** Texte affiché, dans la langue courante. */
   label: string;
   /** Extra search words (compared without accents or case). */
   keywords: string[];
@@ -39,19 +49,23 @@ const command =
   };
 
 export function buildSlashCommands(actions: SlashActions): SlashCommand[] {
-  const block = (id: string, label: string, icon: string, keywords: string[], run: Cmd): SlashCommand => ({
+  const block = (id: string, label: Key, icon: string, run: Cmd): SlashCommand => ({
     id,
-    label,
-    keywords,
+    get label() {
+      return t(label);
+    },
+    keywords: keywordsOf(`slash.kw.${id}` as Key),
     icon,
     group: "Blocs",
     inCell: false,
     run,
   });
-  const insert = (id: string, label: string, icon: string, keywords: string[], inCell: boolean, run: Cmd): SlashCommand => ({
+  const insert = (id: string, label: Key, icon: string, inCell: boolean, run: Cmd): SlashCommand => ({
     id,
-    label,
-    keywords,
+    get label() {
+      return t(label);
+    },
+    keywords: keywordsOf(`slash.kw.${id}` as Key),
     icon,
     group: "Insérer",
     inCell,
@@ -59,36 +73,31 @@ export function buildSlashCommands(actions: SlashActions): SlashCommand[] {
   });
 
   const list: SlashCommand[] = [
-    block("h1", "Titre 1", "H1", ["titre", "heading", "h1"], command(setHeading(1))),
-    block("h2", "Titre 2", "H2", ["titre", "heading", "h2"], command(setHeading(2))),
-    block("h3", "Titre 3", "H3", ["titre", "heading", "h3"], command(setHeading(3))),
-    block("paragraph", "Paragraphe", "¶", ["texte", "normal"], command(setHeading(0))),
-    block("bullet", "Liste à puces", "•≡", ["liste", "puces", "ul"], command(wrapIn("bullet_list"))),
-    block("ordered", "Liste numérotée", "1≡", ["liste", "numero", "ol"], command(wrapIn("ordered_list"))),
-    block("task", "Tâches", "☑", ["todo", "case", "checkbox"], command(wrapIn("task_list"))),
-    block("quote", "Citation", "❝", ["quote", "blockquote"], command(wrapIn("blockquote"))),
-    block("code", "Bloc de code", "{ }", ["code"], command(insertCodeBlock())),
-    block("table", "Tableau", "⊞", ["table", "grille"], (view) => actions.table(view)),
-    insert("link", "Lien", "🔗", ["url", "link"], true, (view) => actions.link(view)),
-    insert("image", "Image", "🖼", ["photo", "img"], true, (view) => actions.image(view)),
-    block("hr", "Séparateur", "―", ["ligne", "hr"], command(insertHorizontalRule())),
-    insert("symbols", "Symboles", "Ω", ["emoji"], true, (view) => actions.symbols(view)),
+    block("h1", "slash.h1", "H1", command(setHeading(1))),
+    block("h2", "slash.h2", "H2", command(setHeading(2))),
+    block("h3", "slash.h3", "H3", command(setHeading(3))),
+    block("paragraph", "slash.paragraph", "¶", command(setHeading(0))),
+    block("bullet", "slash.bullet", "•≡", command(wrapIn("bullet_list"))),
+    block("ordered", "slash.ordered", "1≡", command(wrapIn("ordered_list"))),
+    block("task", "slash.task", "☑", command(wrapIn("task_list"))),
+    block("quote", "slash.quote", "❝", command(wrapIn("blockquote"))),
+    block("code", "slash.code", "{ }", command(insertCodeBlock())),
+    block("table", "toolbar.table", "⊞", (view) => actions.table(view)),
+    insert("link", "toolbar.link", "🔗", true, (view) => actions.link(view)),
+    insert("image", "toolbar.image", "🖼", true, (view) => actions.image(view)),
+    block("hr", "slash.hr", "―", command(insertHorizontalRule())),
+    insert("symbols", "toolbar.symbols", "Ω", true, (view) => actions.symbols(view)),
   ];
   const diagram = actions.diagram;
-  if (diagram) list.push(insert("diagram", "Schéma", "🔀", ["mermaid", "diagramme"], false, (view) => diagram(view)));
+  if (diagram) list.push(insert("diagram", "toolbar.diagram", "🔀", false, (view) => diagram(view)));
 
-  const alertWords: Record<string, string[]> = {
-    note: ["info"],
-    tip: ["tip", "conseil"],
-    important: [],
-    warning: ["warning", "avertissement"],
-    caution: ["caution", "erreur"],
-  };
   for (const kind of ALERT_KINDS) {
     list.push({
       id: `alert-${kind}`,
-      label: `Alerte — ${ALERTS[kind].label}`,
-      keywords: ["alerte", ...alertWords[kind]],
+      get label() {
+        return t("slash.alert", { kind: ALERTS[kind].label });
+      },
+      keywords: keywordsOf(`slash.kw.alert-${kind}` as Key),
       icon: ALERTS[kind].icon,
       group: "Alertes",
       inCell: false,

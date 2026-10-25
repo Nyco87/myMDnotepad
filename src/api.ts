@@ -7,6 +7,10 @@ export type Settings = {
   open_tabs: string[];
   active_tab: string | null;
   recent_emojis: string[];
+  /** 0 = voile opaque … 100 = transparent. */
+  transparency: number;
+  /** "fr" | "en" ; null = langue de Windows. */
+  language: string | null;
 };
 export type RootStatus = "ok" | "unset" | "missing";
 

@@ -1,8 +1,10 @@
+import { t } from "../i18n";
+
 /**
  * Modale de confirmation sombre (remplace window.confirm).
  * Échap annule, Entrée confirme. Résout `true` si confirmé, `false` sinon.
  */
-export function confirmDialog(message: string, okLabel = "Envoyer à la Corbeille", cancelLabel = "Annuler"): Promise<boolean> {
+export function confirmDialog(message: string, okLabel = t("confirm.trash"), cancelLabel = t("common.cancel")): Promise<boolean> {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "confirm-overlay";

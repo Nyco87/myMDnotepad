@@ -1,6 +1,7 @@
 import type { NoteFile } from "../api";
 import type { EditorHandle, EditorOptions } from "../editor/editor";
 import { createAutosaver, type Autosaver } from "../editor/autosave";
+import { errorText, t, tr } from "../i18n";
 import { confirmDialog } from "./confirm-dialog";
 
 /** Accès disque utilisé par les onglets (injecté : `api` dans l'app, une fausse implémentation dans les tests). */
@@ -120,15 +121,15 @@ export function conflictName(rel: string, at: Date): { dir: string; base: string
   const i = rel.lastIndexOf("/");
   const dir = i >= 0 ? rel.slice(0, i) : "";
   const stamp = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}${pad(at.getMinutes())}`;
-  return { dir, base: `${noteTitle(rel)} (conflit ${stamp})` };
+  return { dir, base: `${noteTitle(rel)} (${t("tabs.conflictWord")} ${stamp})` };
 }
 
 const under = (rel: string, prefix: string): boolean => rel === prefix || rel.startsWith(prefix + "/");
 
 export function createTabs(o: TabsOptions): TabsController {
-  const askDiscard = o.confirmDiscard ?? ((m: string, ok: string) => confirmDialog(m, ok, "Annuler"));
+  const askDiscard = o.confirmDiscard ?? ((m: string, ok: string) => confirmDialog(m, ok, t("common.cancel")));
   const unreadableMessage = (rel: string): string =>
-    `La note « ${noteTitle(rel)} » ne peut pas être lue sur le disque : ses modifications sont gardées en mémoire.`;
+    t("tabs.unreadable", { title: noteTitle(rel) });
   /** Note illisible avec des modifications en attente : demande s'il faut les abandonner (null = abandonnées, sinon l'onglet dont la confirmation a été refusée). */
   const discardUnreadable = async (list: Tab[], ok: string, question: string): Promise<Tab | null> => {
     // Toutes les confirmations d'abord ; on n'abandonne rien tant qu'une seule a été refusée.
@@ -143,10 +144,10 @@ export function createTabs(o: TabsOptions): TabsController {
   const saveFailure = (rel: string, e: unknown): string | null => {
     if (e instanceof ConflictGiveUp) return e.message;
     if (errText(e) === UNREADABLE || (e instanceof Error && e.message === UNREADABLE)) return null;
-    return `Enregistrement de « ${noteTitle(rel)} » impossible : ${errText(e)}`;
+    return t("tabs.saveFailed", { title: noteTitle(rel), err: errorText(e) });
   };
   /** Texte d'erreur lisible : « UNREADABLE » devient une phrase française. */
-  const friendly = (rel: string, e: unknown): string => (errText(e) === UNREADABLE ? unreadableMessage(rel) : errText(e));
+  const friendly = (rel: string, e: unknown): string => (errText(e) === UNREADABLE ? unreadableMessage(rel) : errorText(e));
   const reportSave = (rel: string, e: unknown): void => {
     const m = saveFailure(rel, e);
     if (m) notify(m);
@@ -175,7 +176,7 @@ export function createTabs(o: TabsOptions): TabsController {
     try {
       file = await o.io.readNote(rel);
     } catch (e) {
-      if (!quiet) notify(`Impossible d'ouvrir « ${noteTitle(rel)} » : ${errText(e) === NOT_FOUND ? "note introuvable" : errText(e)}`);
+      if (!quiet) notify(t("tabs.openFailed", { title: noteTitle(rel), err: errText(e) === NOT_FOUND ? t("tabs.notFound") : errorText(e) }));
       return false;
     }
     if (find(rel)) return true;
@@ -234,7 +235,7 @@ export function createTabs(o: TabsOptions): TabsController {
             if (errText(e) !== CONFLICT) throw e;
             if (attempt >= 5) {
               throw new ConflictGiveUp(
-                `La note « ${noteTitle(tab.rel)} » est modifiée ailleurs en ce moment ; nouvel essai au prochain changement.`,
+                t("tabs.conflictGiveUp", { title: noteTitle(tab.rel) }),
               );
             }
           } finally {
@@ -328,7 +329,7 @@ export function createTabs(o: TabsOptions): TabsController {
       }
       await o.io.writeNote(c.copy, c.content);
       tab.conflicts.shift();
-      notify(`Note modifiée hors de myMDnotepad : l'autre version est enregistrée dans « ${noteTitle(c.copy)} ».`, { sticky: true });
+      notify(t("tabs.conflictCopied", { title: noteTitle(c.copy) }), { sticky: true });
     }
   };
 
@@ -351,10 +352,10 @@ export function createTabs(o: TabsOptions): TabsController {
     tab.banner.hidden = reason === null;
     if (reason !== null) {
       const text = document.createElement("span");
-      text.textContent = `Cette note ne peut pas être relue : ${reason} myMDnotepad n'y écrit plus tant qu'elle reste illisible.`;
+      tr(text, { text: "tabs.unreadableBanner" }, { reason });
       const retry = document.createElement("button");
       retry.type = "button";
-      retry.textContent = "Réessayer";
+      tr(retry, { text: "tabs.retry" });
       retry.addEventListener("click", () => void ctl.retryRead(tab.rel));
       tab.banner.append(text, retry);
     }
@@ -378,7 +379,7 @@ export function createTabs(o: TabsOptions): TabsController {
         setUnreadable(tab, null);
       } else {
         // Le fichier est là mais illisible : on suspend les enregistrements pour ne rien écraser.
-        setUnreadable(tab, errText(e));
+        setUnreadable(tab, errorText(e));
       }
       return;
     }
@@ -419,8 +420,8 @@ export function createTabs(o: TabsOptions): TabsController {
     } catch (e) {
       notify(
         tab.conflicts.length > 0
-          ? `Conflit sur « ${noteTitle(tab.rel)} » : copie de l'autre version impossible (${errText(e)}). La note ne sera pas enregistrée tant que la copie n'aura pas réussi.`
-          : `Enregistrement de « ${noteTitle(tab.rel)} » impossible : ${errText(e)}`,
+          ? t("tabs.conflictCopyFailed", { title: noteTitle(tab.rel), err: errorText(e) })
+          : t("tabs.saveFailed", { title: noteTitle(tab.rel), err: errorText(e) }),
         { sticky: tab.conflicts.length > 0 },
       );
     }
@@ -444,7 +445,7 @@ export function createTabs(o: TabsOptions): TabsController {
     async close(rel) {
       const tab = find(rel);
       if (!tab) return true;
-      if (await discardUnreadable([tab], "Fermer sans enregistrer", "Fermer sans enregistrer ?")) return false;
+      if (await discardUnreadable([tab], t("tabs.closeNoSave"), t("tabs.closeNoSaveQ"))) return false;
       try {
         // Des frappes pendant l'enregistrement peuvent remettre du contenu en file : on recommence (borné).
         for (let i = 0; i < 5 && (tab.saver.pending() || tab.conflicts.length > 0); i++) {
@@ -452,11 +453,11 @@ export function createTabs(o: TabsOptions): TabsController {
           await settleConflicts(tab);
         }
       } catch (e) {
-        notify(`« ${noteTitle(tab.rel)} » n'a pas pu être enregistrée, l'onglet reste ouvert : ${friendly(tab.rel, e)}`);
+        notify(t("tabs.notSavedKeepOpen", { title: noteTitle(tab.rel), err: friendly(tab.rel, e) }));
         return false;
       }
       if (tab.saver.pending() || tab.conflicts.length > 0) {
-        notify(`« ${noteTitle(tab.rel)} » est encore en cours d'enregistrement, l'onglet reste ouvert.`);
+        notify(t("tabs.stillSaving", { title: noteTitle(tab.rel) }));
         return false;
       }
       remove(tab);
@@ -497,7 +498,7 @@ export function createTabs(o: TabsOptions): TabsController {
 
     async flushAll() {
       const all = tabs.slice();
-      const refused = await discardUnreadable(all, "Fermer sans enregistrer", "Fermer sans enregistrer ?");
+      const refused = await discardUnreadable(all, t("tabs.closeNoSave"), t("tabs.closeNoSaveQ"));
       if (refused) throw new Error(unreadableMessage(refused.rel));
       const results = await Promise.allSettled(
         all.map(async (t) => {
@@ -538,13 +539,13 @@ export function createTabs(o: TabsOptions): TabsController {
       // D'abord enregistrer les frappes en file : une écriture faite après le renommage partirait de l'ancien contenu
       // (anciens liens d'images). Si l'enregistrement échoue, on refuse : l'appelant annule l'opération.
       const held = tabs.filter((t) => under(t.rel, prefix));
-      const refused = await discardUnreadable(held, "Continuer sans enregistrer", "Continuer sans enregistrer ?");
-      if (refused) throw new Error(`${unreadableMessage(refused.rel)} Opération annulée.`);
-      for (const t of held) {
+      const refused = await discardUnreadable(held, t("tabs.continueNoSave"), t("tabs.continueNoSaveQ"));
+      if (refused) throw new Error(`${unreadableMessage(refused.rel)} ${t("tabs.opCancelled")}`);
+      for (const h of held) {
         try {
-          await t.saver.flush();
+          await h.saver.flush();
         } catch (e) {
-          throw new Error(`« ${noteTitle(t.rel)} » n'a pas pu être enregistrée, opération annulée : ${friendly(t.rel, e)}`);
+          throw new Error(t("tabs.notSavedAbort", { title: noteTitle(h.rel), err: friendly(h.rel, e) }));
         }
       }
       let unlock!: () => void;

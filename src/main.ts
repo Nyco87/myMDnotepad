@@ -18,6 +18,7 @@ import { createEditor } from "./editor/editor";
 import { holdDiagramRendering, releaseDiagramRendering } from "./editor/mermaid-view";
 import { cursorAnchor } from "./editor/slash";
 import { buildSlashCommands } from "./editor/slash-commands";
+import { detectLanguage, errorText, isLang, setLanguage, t, tr } from "./i18n";
 import { initAccent } from "./ui/accent";
 import { showContextMenu } from "./ui/context-menu";
 import { showFirstRun } from "./ui/first-run";
@@ -100,14 +101,14 @@ async function main(): Promise<void> {
         if (s.active_tab === active && s.open_tabs.length === open.length && s.open_tabs.every((r, i) => r === open[i])) return;
         await saveSettings({ ...s, open_tabs: open, active_tab: active });
       })
-      .catch((e) => toast(`Session non enregistrée : ${errText(e)}`));
+      .catch((e) => toast(t("main.sessionNotSaved", { err: errorText(e) })));
     return persistChain;
   };
 
   /** Un schéma en cours d'édition ne doit pas être abandonné en silence par une fermeture d'onglet. */
   const workshopBlocksClose = (): boolean => {
     if (!document.querySelector(".ws-overlay")) return false;
-    toast("Termine ou annule le schéma en cours.");
+    toast(t("main.finishDiagram"));
     return true;
   };
 
@@ -128,7 +129,7 @@ async function main(): Promise<void> {
     try {
       await tabs?.flushAll();
     } catch (e) {
-      toast(`Certaines notes n'ont pas pu être enregistrées, le dossier n'a pas été changé (${errText(e)}).`);
+      toast(t("main.notesNotSaved", { err: errorText(e) }));
       return;
     }
     try {
@@ -138,14 +139,14 @@ async function main(): Promise<void> {
       sessionStorage.setItem(CHANGE_ROOT_KEY, "1");
     } catch (e) {
       restoring = false;
-      toast(`Changement de dossier impossible : ${errText(e)}`);
+      toast(t("main.changeRootFailed", { err: errorText(e) }));
       return;
     }
     location.reload(); // ferme les onglets et repart sur l'écran de premier lancement
   };
   function openMenu(anchor: DOMRect): void {
     showContextMenu(anchor.left, anchor.bottom + 2, [
-      { label: "Changer de dossier de notes…", action: () => void changeRoot() },
+      { label: t("main.changeRootMenu"), action: () => void changeRoot() },
     ]);
   }
 
@@ -168,7 +169,7 @@ async function main(): Promise<void> {
   let forceCloseUntil = 0;
   let forceNext = false; // l'enregistrement dure trop longtemps : la prochaine demande ferme quand même
   let closing = false;
-  const destroy = (): Promise<void> => win.destroy().catch((e) => toast(`Fermeture impossible : ${errText(e)}`));
+  const destroy = (): Promise<void> => win.destroy().catch((e) => toast(t("main.closeFailed", { err: errorText(e) })));
   void win
     .onCloseRequested(async (event) => {
       event.preventDefault();
@@ -180,14 +181,14 @@ async function main(): Promise<void> {
       closing = true;
       const slow = setTimeout(() => {
         forceNext = true;
-        toast("L'enregistrement est long. Fermez à nouveau pour quitter quand même.");
+        toast(t("main.savingLong"));
       }, FORCE_CLOSE_MS);
       try {
         try {
           await tabs?.flushAll();
         } catch (e) {
           forceCloseUntil = Date.now() + FORCE_CLOSE_MS;
-          toast(`Certaines notes n'ont pas pu être enregistrées (${errText(e)}). Fermez à nouveau pour quitter quand même.`);
+          toast(t("main.closeAgain", { err: errorText(e) }));
           return;
         }
         await persist(); // sans effet tant que la restauration n'est pas finie : la session d'origine reste en place
@@ -244,7 +245,7 @@ async function main(): Promise<void> {
       try {
         await readNote(rel);
       } catch (e) {
-        if (errText(e) === NOT_FOUND) return toast(`Note introuvable : ${rel}`);
+        if (errText(e) === NOT_FOUND) return toast(t("main.noteNotFound", { rel }));
         // autre erreur : tabs.open la signalera elle-même
       }
     }
@@ -255,7 +256,7 @@ async function main(): Promise<void> {
   const startWorkspace = async (settings: Settings): Promise<void> => {
     app.classList.remove("no-root");
     ui.emptyState.hidden = false;
-    ui.emptyState.textContent = "Aucune note ouverte — Ctrl+N pour en créer une";
+    tr(ui.emptyState, { text: "main.emptyState" });
 
     // Menu « / » : les commandes qui ouvrent une fenêtre passent par la barre d'outils, ancrées sur le curseur.
     const viaToolbar = (id: string) => (view: EditorView) => toolbar?.invoke(id, cursorAnchor(view));
@@ -273,7 +274,7 @@ async function main(): Promise<void> {
       makeEditor: (mount, opts) => {
         opts.onError = toast;
         opts.links = () => ({
-          openExternal: (url) => void openExternal(url).catch((e) => toast(`Ouverture du lien impossible : ${errText(e)}`)),
+          openExternal: (url) => void openExternal(url).catch((e) => toast(t("main.linkFailed", { err: errorText(e) }))),
           openNote: (rel) => void openLinkedNote(rel),
         });
         opts.slashCommands = () => slashCommands;
@@ -303,7 +304,7 @@ async function main(): Promise<void> {
     });
     onTabsChange();
 
-    void onFsChanged((paths) => void tabs?.externalChange(paths)).catch((e) => toast(`Surveillance du dossier impossible : ${errText(e)}`));
+    void onFsChanged((paths) => void tabs?.externalChange(paths)).catch((e) => toast(t("main.watchFailed", { err: errorText(e) })));
 
     // Démarrage rapide : l'onglet actif d'abord, puis l'arborescence et les autres onglets sans bloquer.
     const restore = tabs.restore(settings.open_tabs ?? [], settings.active_tab);
@@ -324,8 +325,9 @@ async function main(): Promise<void> {
     try {
       [settings, status] = await Promise.all([getSettings(), rootStatus()]);
     } catch (e) {
-      toast(`Réglages illisibles : ${errText(e)}`);
+      toast(t("main.settingsUnreadable", { err: errorText(e) }));
     }
+    setLanguage(isLang(settings?.language) ? settings.language : detectLanguage());
     let forceChange = false;
     try {
       forceChange = sessionStorage.getItem(CHANGE_ROOT_KEY) === "1";
@@ -351,7 +353,8 @@ async function main(): Promise<void> {
     console.error(e);
     app.classList.add("no-root");
     ui.emptyState.hidden = false;
-    ui.emptyState.textContent = `Erreur au démarrage : ${errText(e)}`;
+    delete ui.emptyState.dataset.i18nText;
+    ui.emptyState.textContent = t("main.startupError", { err: errorText(e) });
     ready();
   }
 }
@@ -359,5 +362,5 @@ async function main(): Promise<void> {
 void main().catch((e) => {
   console.error(e);
   const app = document.getElementById("app");
-  if (app) app.textContent = `Erreur au démarrage : ${errText(e)}`;
+  if (app) app.textContent = t("main.startupError", { err: errorText(e) });
 });
